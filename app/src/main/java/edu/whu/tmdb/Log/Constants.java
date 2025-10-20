@@ -7,10 +7,12 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import edu.whu.tmdb.App;
+
 public class Constants {
 
     // 日志文件目录
-    public static final String LOG_BASE_DIR = "data/log/";
+    public static final String LOG_BASE_DIR = new File(App.context.getCacheDir(), "data/log/").getAbsolutePath();
 
     // 从文件的offset偏移处读取长度为length的字节流
     public static byte[] readBytesFromFile( long offset, int length, String fileName) {
