@@ -45,7 +45,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // 生成原始结果
-            String rawResult = Main.function1(sqlCommand);
+            String rawResult = Main.execute_UI_single(sqlCommand);
 
             // 创建横向滚动容器
             HorizontalScrollView hsv = new HorizontalScrollView(this);

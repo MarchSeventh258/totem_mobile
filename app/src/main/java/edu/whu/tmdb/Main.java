@@ -14,7 +14,7 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 
 public class Main {
-    public static String function1(String sqlCommand){
+    public static String execute_UI_single(String sqlCommand){
         @SuppressWarnings("unused")
         SelectResult resultt = execute("drop class exist;");
         // 调试用
@@ -37,6 +37,7 @@ public class Main {
                 if (result != null) {
                     return DbOperation.getResultString(result);
                 }
+                else return "success";
             } catch (Exception e) {
                 e.printStackTrace();
                 return "Error: " + e.getMessage();  // 返回错误信息
@@ -72,7 +73,7 @@ public class Main {
             } else if (!sqlCommand.isEmpty()) {
                 SelectResult result = execute(sqlCommand);
                 if (result != null) {
-                   try {
+                    try {
                         DbOperation.printResult(result);
                     } catch (TMDBException e) {
                         // 处理异常，例如记录日志、提示用户等
