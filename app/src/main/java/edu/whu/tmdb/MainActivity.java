@@ -44,34 +44,38 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // 生成原始结果
-            String rawResult = Main.execute_UI_single(sqlCommand);
+            // 生成结果数组
+            String[] rawResults = Main.execute_UI(sqlCommand);
 
-            // 创建横向滚动容器
-            HorizontalScrollView hsv = new HorizontalScrollView(this);
-            hsv.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT));
+            // 遍历每个结果并显示
+            for (String rawResult : rawResults) {
 
-            // 创建文本视图
-            TextView tv = new TextView(this);
-            tv.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT));
+                // 创建横向滚动容器
+                HorizontalScrollView hsv = new HorizontalScrollView(this);
+                hsv.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
 
-            // 关键修改：设置等宽字体和HTML格式
-            String htmlResult = "<pre><tt>" +
-                    rawResult.replace(" ", "&nbsp;")
-                            .replace("\n", "<br>") +
-                    "</tt></pre>";
-            tv.setText(Html.fromHtml(htmlResult, Html.FROM_HTML_MODE_LEGACY));
+                // 创建文本视图
+                TextView tv = new TextView(this);
+                tv.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT));
 
-            tv.setTextSize(16);
-            tv.setTypeface(Typeface.MONOSPACE); // 强制等宽字体
-            tv.setTextColor(getResources().getColor(android.R.color.black));
+                // 设置等宽字体和HTML格式
+                String htmlResult = "<pre><tt>" +
+                        rawResult.replace(" ", "&nbsp;")
+                                .replace("\n", "<br>") +
+                        "</tt></pre>";
+                tv.setText(Html.fromHtml(htmlResult, Html.FROM_HTML_MODE_LEGACY));
 
-            hsv.addView(tv);
-            resultContainer.addView(hsv);
+                tv.setTextSize(16);
+                tv.setTypeface(Typeface.MONOSPACE); // 强制等宽字体
+                tv.setTextColor(getResources().getColor(android.R.color.black));
+
+                hsv.addView(tv);
+                resultContainer.addView(hsv);
+            }
 
             // 自动滚动到底部
             verticalScrollView.post(() -> verticalScrollView.fullScroll(View.FOCUS_DOWN));

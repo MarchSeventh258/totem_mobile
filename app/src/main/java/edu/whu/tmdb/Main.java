@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import edu.whu.tmdb.query.Transaction;
 import edu.whu.tmdb.query.operations.Exception.TMDBException;
@@ -44,6 +46,34 @@ public class Main {
             }
         }
         return "";
+    }
+
+    public static String[] execute_UI(String sqlCommands) {
+        // 按换行符分割多条指令
+        String[] commands = sqlCommands.split("\n");
+        List<String> results = new ArrayList<>();
+
+        for (String command : commands) {
+            String trimmedCommand = command.trim();
+
+            // 跳过空指令
+            if (trimmedCommand.isEmpty()) {
+                continue;
+            }
+
+            try {
+                // 调用原有的单条指令执行函数
+                String singleResult = execute_UI_single(trimmedCommand);
+                results.add(singleResult != null ? singleResult : "");
+
+            } catch (Exception e) {
+                results.add("Error: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        // 转换为数组返回
+        return results.toArray(new String[0]);
     }
 
     public static void main(String[] args) throws IOException {
