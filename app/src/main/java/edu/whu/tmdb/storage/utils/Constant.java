@@ -20,10 +20,10 @@ public class Constant {
     public static final long MAX_MEM_SIZE = 4L * 1024 * 1024;
 
     // LSM-Tree文件目录
-    public static final String DATABASE_DIR =new File(App.context.getCacheDir(),"data/level/").getAbsolutePath();
+    public static final String DATABASE_DIR =new File(App.context.getCacheDir(),"data/level/").getAbsolutePath() + "/";
 
     // 系统表文件目录
-    public static final String SYSTEM_TABLE_DIR =new File(App.context.getCacheDir(), "data/sys/").getAbsolutePath();
+    public static final String SYSTEM_TABLE_DIR =new File(App.context.getCacheDir(), "data/sys/").getAbsolutePath() + "/";
 
     // 最大level数
     public static final int MAX_LEVEL = 6;
