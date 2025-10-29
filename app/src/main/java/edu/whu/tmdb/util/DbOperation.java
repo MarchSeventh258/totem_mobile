@@ -1,5 +1,9 @@
 package edu.whu.tmdb.util;
 
+import static edu.whu.tmdb.Log.Constants.LOG_BASE_DIR;
+import static edu.whu.tmdb.storage.utils.Constant.DATABASE_DIR;
+import static edu.whu.tmdb.storage.utils.Constant.SYSTEM_TABLE_DIR;
+
 import java.io.File;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -78,18 +82,11 @@ public class DbOperation {
      * 删除数据库所有数据文件，即重置数据库
      */
     public static void resetDB() {
-        // 仓库路径
-        String repositoryPath = "D:\\tmdb";
-
-        // 子目录路径
-        String sysPath = repositoryPath + File.separator + "data\\sys";
-        String logPath = repositoryPath + File.separator + "data\\log";
-        String levelPath = repositoryPath + File.separator + "data\\level";
-
+        // 使用常量定义的目录路径
         List<String> filePath = new ArrayList<>();
-        filePath.add(sysPath);
-        filePath.add(logPath);
-        filePath.add(levelPath);
+        filePath.add(SYSTEM_TABLE_DIR);
+        filePath.add(LOG_BASE_DIR);
+        filePath.add(DATABASE_DIR);
 
         // 遍历删除文件
         for (String path : filePath) {
@@ -98,7 +95,7 @@ public class DbOperation {
             // 检查目录是否存在
             if (!directory.exists()) {
                 System.out.println("目录不存在：" + path);
-                return;
+                continue;
             }
 
             // 获取目录中的所有文件
@@ -111,6 +108,13 @@ public class DbOperation {
                 } else {
                     System.out.println("无法删除文件：" + file.getAbsolutePath());
                 }
+            }
+
+            // 删除当前目录
+            if (directory.delete()) {
+                System.out.println("已删除目录：" + directory.getAbsolutePath());
+            } else {
+                System.out.println("无法删除目录：" + directory.getAbsolutePath());
             }
         }
     }
@@ -375,6 +379,44 @@ public class DbOperation {
         }
 
         return result.toString();
+    }
+    public static String getResetDB() {
+        // 使用常量定义的目录路径
+        List<String> filePath = new ArrayList<>();
+        filePath.add(SYSTEM_TABLE_DIR);
+        filePath.add(LOG_BASE_DIR);
+        filePath.add(DATABASE_DIR);
+
+        // 遍历删除文件
+        for (String path : filePath) {
+            File directory = new File(path);
+
+            // 检查目录是否存在
+            if (!directory.exists()) {
+                System.out.println("目录不存在：" + path);
+                continue;
+            }
+
+            // 获取目录中的所有文件
+            File[] files = directory.listFiles();
+            if (files == null) { continue; }
+            for (File file : files) {
+                // 删除文件
+                if (file.delete()) {
+                    System.out.println("已删除文件：" + file.getAbsolutePath());
+                } else {
+                    System.out.println("无法删除文件：" + file.getAbsolutePath());
+                }
+            }
+
+            // 删除当前目录
+            if (directory.delete()) {
+                System.out.println("已删除目录：" + directory.getAbsolutePath());
+            } else {
+                System.out.println("无法删除目录：" + directory.getAbsolutePath());
+            }
+        }
+        return "reset db success";
     }
 
 

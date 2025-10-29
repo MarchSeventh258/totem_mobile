@@ -20,9 +20,9 @@ public class Main {
         @SuppressWarnings("unused")
         SelectResult resultt = execute("drop class exist;");
         // 调试用
-        System.out.print("tmdb> ");
+        // System.out.print("tmdb> ");
         if ("resetdb".equalsIgnoreCase(sqlCommand)) {
-            DbOperation.resetDB();
+            return DbOperation.getResetDB();
         } else if ("show BiPointerTable".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getBiPointerTableString();
         } else if ("show ClassTable".equalsIgnoreCase(sqlCommand)) {
