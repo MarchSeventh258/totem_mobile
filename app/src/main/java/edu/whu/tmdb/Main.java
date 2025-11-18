@@ -23,15 +23,15 @@ public class Main {
         // System.out.print("tmdb> ");
         if ("resetdb".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getResetDB();
-        } else if ("show BiPointerTable".equalsIgnoreCase(sqlCommand)) {
+        } else if ("show BiPointerTable".equalsIgnoreCase(sqlCommand)||"showb".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getBiPointerTableString();
-        } else if ("show ClassTable".equalsIgnoreCase(sqlCommand)) {
+        } else if ("show ClassTable".equalsIgnoreCase(sqlCommand)||"showc".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getClassTableString();
-        } else if ("show AttributeTable".equalsIgnoreCase(sqlCommand)) {
+        } else if ("show AttributeTable".equalsIgnoreCase(sqlCommand)||"showa".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getArributeTableString();
-        }else if ("show DeputyTable".equalsIgnoreCase(sqlCommand)) {
+        }else if ("show DeputyTable".equalsIgnoreCase(sqlCommand)||"showd".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getDeputyTableString();
-        } else if ("show SwitchingTable".equalsIgnoreCase(sqlCommand)) {
+        } else if ("show SwitchingTable".equalsIgnoreCase(sqlCommand)||"shows".equalsIgnoreCase(sqlCommand)) {
             return DbOperation.getSwitchingTableString();
         } else if (!sqlCommand.isEmpty()) {
             try {
