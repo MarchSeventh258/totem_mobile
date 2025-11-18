@@ -79,6 +79,9 @@ public class MainActivity extends AppCompatActivity {
 
             // 自动滚动到底部
             verticalScrollView.post(() -> verticalScrollView.fullScroll(View.FOCUS_DOWN));
+
+            // 清空输入框
+            etCmd.setText("");
         });
 
         // 清屏按钮逻辑
