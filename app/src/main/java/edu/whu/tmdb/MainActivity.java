@@ -5,6 +5,7 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Html;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
@@ -13,6 +14,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.graphics.Insets;
 
 import edu.whu.tmdb.R;
 import edu.whu.tmdb.Main;
@@ -32,6 +36,25 @@ public class MainActivity extends AppCompatActivity {
         etCmd = findViewById(R.id.etCmd);
         resultContainer = findViewById(R.id.resultContainer);
         verticalScrollView = findViewById(R.id.scrollView);
+
+        // 保证在软键盘弹出时调整布局（兼容性设置）
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        // 使 ScrollView 在内容较少时也能填满视口，配合 adjustResize 使用更稳定
+        verticalScrollView.setFillViewport(true);
+
+        // 监听 WindowInsets（包含 IME），根据 IME 高度调整 ScrollView 底部 padding，确保 EditText 可见
+        View rootView = findViewById(android.R.id.content);
+        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
+            Insets imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
+            verticalScrollView.setPadding(
+                    verticalScrollView.getPaddingLeft(),
+                    verticalScrollView.getPaddingTop(),
+                    verticalScrollView.getPaddingRight(),
+                    imeInsets.bottom
+            );
+            return windowInsets;
+        });
+        ViewCompat.requestApplyInsets(rootView);
 
         Button btExecute = findViewById(R.id.btExecute);
         Button btClear = findViewById(R.id.btClear);
