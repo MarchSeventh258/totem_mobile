@@ -16,36 +16,44 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 
 public class Main {
-    public static String execute_UI_single(String sqlCommand){
-        @SuppressWarnings("unused")
-        SelectResult resultt = execute("drop class exist;");
-        // 调试用
-        // System.out.print("tmdb> ");
-        if ("resetdb".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getResetDB();
-        } else if ("show BiPointerTable".equalsIgnoreCase(sqlCommand)||"showb".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getBiPointerTableString();
-        } else if ("show ClassTable".equalsIgnoreCase(sqlCommand)||"showc".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getClassTableString();
-        } else if ("show AttributeTable".equalsIgnoreCase(sqlCommand)||"showa".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getArributeTableString();
-        }else if ("show DeputyTable".equalsIgnoreCase(sqlCommand)||"showd".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getDeputyTableString();
-        } else if ("show SwitchingTable".equalsIgnoreCase(sqlCommand)||"shows".equalsIgnoreCase(sqlCommand)) {
-            return DbOperation.getSwitchingTableString();
-        } else if (!sqlCommand.isEmpty()) {
-            try {
-                SelectResult result = execute(sqlCommand);
-                if (result != null) {
-                    return DbOperation.getResultString(result);
-                }
-                else return "success";
-            } catch (Exception e) {
-                e.printStackTrace();
-                return "Error: " + e.getMessage();  // 返回错误信息
-            }
+    public static String executeClientCommand(String sqlCommand) {
+        if (sqlCommand == null) {
+            return "";
         }
-        return "";
+
+        String command = sqlCommand.trim();
+        if (command.isEmpty()) {
+            return "";
+        }
+
+        if ("resetdb".equalsIgnoreCase(command)) {
+            return DbOperation.getResetDB();
+        } else if ("show BiPointerTable".equalsIgnoreCase(command) || "showb".equalsIgnoreCase(command)) {
+            return DbOperation.getBiPointerTableString();
+        } else if ("show ClassTable".equalsIgnoreCase(command) || "showc".equalsIgnoreCase(command)) {
+            return DbOperation.getClassTableString();
+        } else if ("show AttributeTable".equalsIgnoreCase(command) || "showa".equalsIgnoreCase(command)) {
+            return DbOperation.getArributeTableString();
+        } else if ("show DeputyTable".equalsIgnoreCase(command) || "showd".equalsIgnoreCase(command)) {
+            return DbOperation.getDeputyTableString();
+        } else if ("show SwitchingTable".equalsIgnoreCase(command) || "shows".equalsIgnoreCase(command)) {
+            return DbOperation.getSwitchingTableString();
+        }
+
+        try {
+            SelectResult result = execute(command);
+            if (result != null) {
+                return DbOperation.getResultString(result);
+            }
+            return "success";
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    public static String execute_UI_single(String sqlCommand){
+        return executeClientCommand(sqlCommand);
     }
 
     public static String[] execute_UI(String sqlCommands) {

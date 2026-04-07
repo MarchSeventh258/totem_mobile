@@ -6,6 +6,16 @@ android {
     namespace = "edu.whu.tmdb"
     compileSdk = 35
 
+    buildFeatures {
+        aidl = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            aidl.srcDirs("src/main/aidl")
+        }
+    }
+
     defaultConfig {
         applicationId = "edu.whu.tmdb"
         minSdk = 26

@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Totem Mobile DataBase"
 include(":app")
+include(":client")
  
