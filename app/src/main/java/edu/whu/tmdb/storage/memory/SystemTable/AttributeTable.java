@@ -5,4 +5,8 @@ import java.util.List;
 
 public class AttributeTable {
     public List<AttributeTableItem> attribuleTableList = new ArrayList<>();
+
+    public void clear() {
+        attribuleTableList.clear();
+    }
 }

@@ -177,6 +177,26 @@ public class MemManager {
         this.memTable.clear();
     }
 
+    // 重置所有内存状态（系统表 + 数据表 + 缓存 + level 信息）
+    public void clearAll() {
+        clearMem();
+        objectTable.clear();
+        classTable.clear();
+        attributeTable.clear();
+        deputyTable.clear();
+        biPointerTable.clear();
+        switchingTable.clear();
+        deputyRuleTable.clear();
+        cacheManager.dataCache = new edu.whu.tmdb.storage.cache.DataCache();
+        cacheManager.metaCache = new edu.whu.tmdb.storage.cache.MetaCache();
+        cacheManager.blockCache = new edu.whu.tmdb.storage.cache.BlockCache();
+        levelManager = new LevelManager();
+        levelManager.cacheManager = cacheManager;
+        // 确保必要的目录存在（resetDB 可能已将其删除）
+        new File(Constant.SYSTEM_TABLE_DIR).mkdirs();
+        new File(Constant.DATABASE_DIR).mkdirs();
+    }
+
 
     // 将内存中的数据持久化保存
     public int saveMemTableToFile(){

@@ -85,6 +85,7 @@ public class SSTable {
                 this.raf = new RandomAccessFile(f, "r");
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
+                return;
             }
         }else if(mode == 3){
             this.fileName = fileName;
@@ -94,6 +95,7 @@ public class SSTable {
                 this.raf = new RandomAccessFile(f, "r");
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
+                return;
             }
             // 读Footer
             long[] info = readFooter();
@@ -141,6 +143,7 @@ public class SSTable {
     // 从此SSTable偏移为offset处读取长度为length的字节数组
     private byte[] readFromFile(long offset, int length){
         byte[] ret = new byte[length];
+        if (raf == null) return ret;
         try{
             raf.seek(offset);
             raf.read(ret);
@@ -299,6 +302,7 @@ public class SSTable {
     // 根据zone map查询如果不在范围中则返回null
     // 根据bloom filter查或者遍历查询没找到则返回""
     public V search(K key) throws IOException {
+        if (raf == null) return new V();
 
         // 如果meta data不完整，则需要从文件中读取
         if(this.maxKey.equals(new K())){
@@ -368,6 +372,7 @@ public class SSTable {
 
     // 在SSTable中进行rangeQuery
     public Map<K, V> rangeQuery(K startKey, K endKey) throws IOException {
+        if (raf == null) return new TreeMap<>();
 
         // 如果meta data不完整，则需要从文件中读取
         if(this.maxKey.equals(new K())){

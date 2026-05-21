@@ -117,6 +117,9 @@ public class DbOperation {
                 System.out.println("无法删除目录：" + directory.getAbsolutePath());
             }
         }
+
+        // 清除内存中的系统表、数据表和缓存
+        edu.whu.tmdb.storage.memory.MemManager.getInstance().clearAll();
     }
     public static String getResultString(SelectResult result) throws TMDBException {
         StringBuilder resultString = new StringBuilder();
@@ -416,6 +419,8 @@ public class DbOperation {
                 System.out.println("无法删除目录：" + directory.getAbsolutePath());
             }
         }
+        // 清除内存中的系统表、数据表和缓存
+        edu.whu.tmdb.storage.memory.MemManager.getInstance().clearAll();
         return "reset db success";
     }
 

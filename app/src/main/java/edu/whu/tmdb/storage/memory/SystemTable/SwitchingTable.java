@@ -7,4 +7,7 @@ import java.util.List;
 public class SwitchingTable implements Serializable {
     public List<SwitchingTableItem> switchingTableList = new ArrayList<>();
 
+    public void clear() {
+        switchingTableList.clear();
+    }
 }
