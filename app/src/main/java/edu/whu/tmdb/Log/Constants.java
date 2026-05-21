@@ -11,8 +11,17 @@ import edu.whu.tmdb.App;
 
 public class Constants {
 
+    private static File getBaseDir() {
+        if (App.context != null) {
+            return App.context.getCacheDir();
+        }
+        File tempDir = new File(System.getProperty("java.io.tmpdir"), "tmdb_test");
+        tempDir.mkdirs();
+        return tempDir;
+    }
+
     // 日志文件目录
-    public static final String LOG_BASE_DIR = new File(App.context.getCacheDir(), "data/log/").getAbsolutePath() + "/";
+    public static final String LOG_BASE_DIR = new File(getBaseDir(), "data/log/").getAbsolutePath() + "/";
 
     // 从文件的offset偏移处读取长度为length的字节流
     public static byte[] readBytesFromFile( long offset, int length, String fileName) {

@@ -9,11 +9,15 @@ import java.util.List;
 
 import edu.whu.tmdb.query.Transaction;
 import edu.whu.tmdb.query.operations.Exception.TMDBException;
+import edu.whu.tmdb.query.operations.impl.CrossClassQueryImpl;
 import edu.whu.tmdb.query.operations.utils.SelectResult;
 import edu.whu.tmdb.util.DbOperation;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.select.CrossClassPathExpression;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.SelectItem;
 
 public class Main {
     public static String execute_UI_single(String sqlCommand){
@@ -124,20 +128,37 @@ public class Main {
     }
 
     public static SelectResult execute(String s)  {
-
         Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
         SelectResult selectResult = null;
         try {
             // 使用JSqlparser进行sql语句解析，会根据sql类型生成对应的语法树
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(s.getBytes());
             Statement stmt = CCJSqlParserUtil.parse(byteArrayInputStream);
+
+            // 检测跨类查询：如果解析后的Select包含CrossClassPathExpression
+            if (stmt instanceof net.sf.jsqlparser.statement.select.Select) {
+                net.sf.jsqlparser.statement.select.Select selectStmt =
+                        (net.sf.jsqlparser.statement.select.Select) stmt;
+                if (selectStmt.getSelectBody() instanceof PlainSelect) {
+                    PlainSelect plainSelect = (PlainSelect) selectStmt.getSelectBody();
+                    for (SelectItem item : plainSelect.getSelectItems()) {
+                        if (item instanceof CrossClassPathExpression) {
+                            CrossClassQueryImpl crossClassQuery = new CrossClassQueryImpl();
+                            return crossClassQuery.execute(plainSelect,
+                                    (CrossClassPathExpression) item);
+                        }
+                    }
+                }
+            }
+
             selectResult = transaction.query("", -1, stmt);
             if(!stmt.getClass().getSimpleName().toLowerCase().equals("select")){
                 transaction.SaveAll();
             }
         }catch (JSQLParserException e) {
-            // e.printStackTrace();    // 打印语法错误的堆栈信息
             System.out.println("syntax error");
+        } catch (TMDBException e) {
+            System.out.println("Cross-class query error: " + e.getMessage());
         }
         return selectResult;
     }

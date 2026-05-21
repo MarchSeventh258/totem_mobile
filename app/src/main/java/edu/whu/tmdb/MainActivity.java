@@ -1,6 +1,5 @@
 package edu.whu.tmdb;
 
-import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Html;
@@ -8,58 +7,35 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.graphics.Insets;
 
 import edu.whu.tmdb.R;
-import edu.whu.tmdb.Main;
 
 public class MainActivity extends AppCompatActivity {
 
     private EditText etCmd;
     private LinearLayout resultContainer;
-    private ScrollView verticalScrollView;
+    private ScrollView scrollView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // 初始化视图
         etCmd = findViewById(R.id.etCmd);
         resultContainer = findViewById(R.id.resultContainer);
-        verticalScrollView = findViewById(R.id.scrollView);
+        scrollView = findViewById(R.id.scrollView);
 
-        // 保证在软键盘弹出时调整布局（兼容性设置）
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        // 使 ScrollView 在内容较少时也能填满视口，配合 adjustResize 使用更稳定
-        verticalScrollView.setFillViewport(true);
-
-        // 监听 WindowInsets（包含 IME），根据 IME 高度调整 ScrollView 底部 padding，确保 EditText 可见
-        View rootView = findViewById(android.R.id.content);
-        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-            Insets imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
-            verticalScrollView.setPadding(
-                    verticalScrollView.getPaddingLeft(),
-                    verticalScrollView.getPaddingTop(),
-                    verticalScrollView.getPaddingRight(),
-                    imeInsets.bottom
-            );
-            return windowInsets;
-        });
-        ViewCompat.requestApplyInsets(rootView);
+        scrollView.setFillViewport(true);
 
         Button btExecute = findViewById(R.id.btExecute);
         Button btClear = findViewById(R.id.btClear);
 
-        // 执行按钮逻辑
         btExecute.setOnClickListener(v -> {
             String sqlCommand = etCmd.getText().toString().trim();
             if (sqlCommand.isEmpty()) {
@@ -67,48 +43,32 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // 生成结果数组
             String[] rawResults = Main.execute_UI(sqlCommand);
 
-            // 遍历每个结果并显示
             for (String rawResult : rawResults) {
-
-                // 创建横向滚动容器
-                HorizontalScrollView hsv = new HorizontalScrollView(this);
-                hsv.setLayoutParams(new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT));
-
-                // 创建文本视图
                 TextView tv = new TextView(this);
                 tv.setLayoutParams(new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT));
 
-                // 设置等宽字体和HTML格式
                 String htmlResult = "<pre><tt>" +
                         rawResult.replace(" ", "&nbsp;")
                                 .replace("\n", "<br>") +
                         "</tt></pre>";
                 tv.setText(Html.fromHtml(htmlResult, Html.FROM_HTML_MODE_LEGACY));
 
-                tv.setTextSize(16);
-                tv.setTypeface(Typeface.MONOSPACE); // 强制等宽字体
-                tv.setTextColor(getResources().getColor(android.R.color.black));
+                tv.setTextSize(14);
+                tv.setTypeface(Typeface.MONOSPACE);
+                tv.setTextColor(0xFF1A1A1A);
 
-                hsv.addView(tv);
-                resultContainer.addView(hsv);
+                tv.setPadding(4, 4, 4, 4);
+                resultContainer.addView(tv);
             }
 
-            // 自动滚动到底部
-            verticalScrollView.post(() -> verticalScrollView.fullScroll(View.FOCUS_DOWN));
-
-            // 清空输入框
+            scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
             etCmd.setText("");
         });
 
-        // 清屏按钮逻辑
         btClear.setOnClickListener(v -> resultContainer.removeAllViews());
-
     }
 }

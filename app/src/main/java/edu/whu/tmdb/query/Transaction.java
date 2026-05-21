@@ -118,7 +118,29 @@ public class Transaction {
     public SelectResult query(String s) throws JSQLParserException {
         // 使用JSqlparser进行sql语句解析，会根据sql类型生成对应的语法树
         ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(s.getBytes());
-        Statement stmt= CCJSqlParserUtil.parse(byteArrayInputStream);
+        Statement stmt = CCJSqlParserUtil.parse(byteArrayInputStream);
+
+        // 检测跨类查询：如果解析后的Select包含CrossClassPathExpression，则路由到跨类查询执行器
+        if (stmt instanceof net.sf.jsqlparser.statement.select.Select) {
+            net.sf.jsqlparser.statement.select.Select selectStmt =
+                    (net.sf.jsqlparser.statement.select.Select) stmt;
+            if (selectStmt.getSelectBody() instanceof net.sf.jsqlparser.statement.select.PlainSelect) {
+                net.sf.jsqlparser.statement.select.PlainSelect plainSelect =
+                        (net.sf.jsqlparser.statement.select.PlainSelect) selectStmt.getSelectBody();
+                for (net.sf.jsqlparser.statement.select.SelectItem item : plainSelect.getSelectItems()) {
+                    if (item instanceof net.sf.jsqlparser.statement.select.CrossClassPathExpression) {
+                        try {
+                            CrossClassQueryImpl crossClassQuery = new CrossClassQueryImpl();
+                            return crossClassQuery.execute(plainSelect,
+                                    (net.sf.jsqlparser.statement.select.CrossClassPathExpression) item);
+                        } catch (TMDBException e) {
+                            System.out.println("Cross-class query error: " + e.getMessage());
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
 
         return this.query("", -1, stmt);
     }

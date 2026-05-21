@@ -31,6 +31,29 @@ android {
     }
 }
 
+tasks.register<JavaExec>("runMain") {
+    dependsOn("compileDebugJavaWithJavac")
+    standardInput = System.`in`
+    val runtimeClasspath: FileCollection = configurations.getByName("debugRuntimeClasspath")
+    classpath = files(
+        "build/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
+        "libs/jsqlparser-4.6-SNAPSHOT.jar",
+        "C:/Users/JD/AppData/Local/Android/Sdk/platforms/android-35/android.jar"
+    ) + runtimeClasspath
+    mainClass.set("edu.whu.tmdb.Main")
+}
+
+tasks.register<JavaExec>("runTest") {
+    dependsOn("compileDebugJavaWithJavac")
+    val runtimeClasspath: FileCollection = configurations.getByName("debugRuntimeClasspath")
+    classpath = files(
+        "build/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
+        "libs/jsqlparser-4.6-SNAPSHOT.jar",
+        "C:/Users/JD/AppData/Local/Android/Sdk/platforms/android-35/android.jar"
+    ) + runtimeClasspath
+    mainClass.set("edu.whu.tmdb.CrossClassQueryTest")
+}
+
 dependencies {
 
     implementation(libs.appcompat)
