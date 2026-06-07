@@ -25,6 +25,7 @@ import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.RowConstructor;
+import net.sf.jsqlparser.expression.StringValue;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.parser.SimpleNode;
@@ -852,13 +853,24 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
                 Object[] tuple = new Object[expressionList1.getExpressions().size()];
                 //将每行的值传到新建的tuple中
                 for (int j = 0; j < expressionList1.getExpressions().size(); j++) {
-                    tuple[j] = expressionList1.getExpressions().get(j).toString();
+                    Expression expr = expressionList1.getExpressions().get(j);
+                    if (expr instanceof StringValue) {
+                        tuple[j] = ((StringValue) expr).getValue();
+                    } else {
+                        tuple[j] = expr.toString();
+                    }
                 }
                 tupleList.addTuple(new Tuple(tuple));
             } else if (value.getClass().getSimpleName().equals("Parenthesis")) {
                 Parenthesis parenthesis = (Parenthesis) value;
                 Expression expression = parenthesis.getExpression();
-                Object[] tuple = new Object[]{expression.toString()};
+                Object val;
+                if (expression instanceof StringValue) {
+                    val = ((StringValue) expression).getValue();
+                } else {
+                    val = expression.toString();
+                }
+                Object[] tuple = new Object[]{val};
                 tupleList.addTuple(new Tuple(tuple));
             }
         }

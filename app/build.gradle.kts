@@ -34,24 +34,41 @@ android {
 tasks.register<JavaExec>("runMain") {
     dependsOn("compileDebugJavaWithJavac")
     standardInput = System.`in`
+    systemProperty("file.encoding", "UTF-8")
+    val androidJar = "${android.sdkDirectory}/platforms/android-${android.compileSdk}/android.jar"
     val runtimeClasspath: FileCollection = configurations.getByName("debugRuntimeClasspath")
     classpath = files(
         "build/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
         "libs/jsqlparser-4.6-SNAPSHOT.jar",
-        "C:/Users/JD/AppData/Local/Android/Sdk/platforms/android-35/android.jar"
+        androidJar
     ) + runtimeClasspath
     mainClass.set("edu.whu.tmdb.Main")
 }
 
 tasks.register<JavaExec>("runTest") {
     dependsOn("compileDebugJavaWithJavac")
+    systemProperty("file.encoding", "UTF-8")
+    val androidJar = "${android.sdkDirectory}/platforms/android-${android.compileSdk}/android.jar"
     val runtimeClasspath: FileCollection = configurations.getByName("debugRuntimeClasspath")
     classpath = files(
         "build/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
         "libs/jsqlparser-4.6-SNAPSHOT.jar",
-        "C:/Users/JD/AppData/Local/Android/Sdk/platforms/android-35/android.jar"
+        androidJar
     ) + runtimeClasspath
     mainClass.set("edu.whu.tmdb.CrossClassQueryTest")
+}
+
+tasks.register<JavaExec>("runRegressionTest") {
+    dependsOn("compileDebugJavaWithJavac")
+    systemProperty("file.encoding", "UTF-8")
+    val androidJar = "${android.sdkDirectory}/platforms/android-${android.compileSdk}/android.jar"
+    val runtimeClasspath: FileCollection = configurations.getByName("debugRuntimeClasspath")
+    classpath = files(
+        "build/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
+        "libs/jsqlparser-4.6-SNAPSHOT.jar",
+        androidJar
+    ) + runtimeClasspath
+    mainClass.set("edu.whu.tmdb.RegressionTest")
 }
 
 dependencies {

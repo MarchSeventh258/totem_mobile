@@ -38,24 +38,24 @@ public class OrderBy {
         List<Tuple> sortedList = new ArrayList<>(tpl.tuplelist);
         final int sortColumnIndex = columnIndex;
         
+        boolean ascending = orderByElement.isAsc();
         sortedList.sort((t1, t2) -> {
             Object v1 = t1.tuple[sortColumnIndex];
             Object v2 = t2.tuple[sortColumnIndex];
-            
+
             if (v1 == null && v2 == null) return 0;
-            if (v1 == null) return -1;
-            if (v2 == null) return 1;
-            
-            // 进行数值比较
+            if (v1 == null) return ascending ? -1 : 1;
+            if (v2 == null) return ascending ? 1 : -1;
+
+            int cmp;
             try {
                 double d1 = Double.parseDouble(v1.toString().trim());
                 double d2 = Double.parseDouble(v2.toString().trim());
-                // 使用 Double.compare 来避免精度问题
-                return Double.compare(d1, d2);
+                cmp = Double.compare(d1, d2);
             } catch (NumberFormatException e) {
-                // 如果解析失败，按字符串处理
-                return v1.toString().compareTo(v2.toString());
+                cmp = v1.toString().compareTo(v2.toString());
             }
+            return ascending ? cmp : -cmp;
         });
 
         // 创建新的 TupleList

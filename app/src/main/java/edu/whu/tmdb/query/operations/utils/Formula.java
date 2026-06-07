@@ -197,8 +197,8 @@ public class Formula {
             return; // Exit the function if obj is null, "NULL", or empty
         }
         
-        switch (type) {
-            case "String":
+        switch (type.toLowerCase()) {
+            case "string":
                 dataList.add(String.valueOf(obj));
                 break;
             case "float":
