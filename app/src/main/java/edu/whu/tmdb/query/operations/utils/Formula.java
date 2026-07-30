@@ -205,13 +205,13 @@ public class Formula {
                 dataList.add(Float.parseFloat(String.valueOf(obj)));
                 break;
             case "int":
-                dataList.add(Integer.parseInt(String.valueOf(obj)));
+                dataList.add((int) Double.parseDouble(String.valueOf(obj)));
                 break;
             case "long":
-                dataList.add(Long.parseLong(String.valueOf(obj)));
+                dataList.add((long) Double.parseDouble(String.valueOf(obj)));
                 break;
             case "short":
-                dataList.add(Short.parseShort(String.valueOf(obj)));
+                dataList.add((short) Double.parseDouble(String.valueOf(obj)));
                 break;
             case "double":
                 dataList.add(Double.parseDouble(String.valueOf(obj)));

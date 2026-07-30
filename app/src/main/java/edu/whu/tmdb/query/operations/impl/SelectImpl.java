@@ -209,6 +209,10 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
         //select item的length
         int length=selectItemList.size();
 
+        // Sort group keys for deterministic output order
+        List<Object> sortedKeys = new ArrayList<>(resultMap.keySet());
+        sortedKeys.sort((a, b) -> String.valueOf(a).compareTo(String.valueOf(b)));
+
         //init resTupleList
         TupleList resTupleList=new TupleList();
         SelectResult result=new SelectResult();
@@ -244,8 +248,7 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
                 ArrayList<Object> thisColumn=new ArrayList<>();
                 if(selectItem.getExpression().toString().equals(groupByElement)
                 ||(selectItem.getAlias()!=null && selectItem.getAlias().getName().equals(groupByElement))){
-                    for (Object o :
-                            resultMap.keySet()) {
+                    for (Object o : sortedKeys) {
                         thisColumn.add(o);
                     }
                 }
@@ -263,23 +266,25 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
                     if(pIndex==-1){
                         throw new TMDBException(/*2, p*/);
                     }
-                    thisColumn=solveAggregationFunction(resultMap,funcName,pIndex);
+                    thisColumn=solveAggregationFunction(resultMap,funcName,pIndex,sortedKeys);
                 }
-                int tempI=-1;
-                Column column = map.get(selectItem).get(0);
-                for (int j = 0; j < selectResult.getClassName().length; j++) {
-                    if(column.getTable()!=null){
-                        if((selectResult.getClassName()[j].equals(column.getTable().getName())
-                                || selectResult.getAlias()[j].equals(column.getTable().getName()))
-                                && selectResult.getAttrname()[j].equals(column.getColumnName())){
-                            tempI=j;
-                            break;
-                        }
-                    }
-                    else{
-                        if(selectResult.getAttrname()[j].equals(column.getColumnName())){
-                            tempI=j;
-                            break;
+                int tempI = 0;
+                ArrayList<Column> columns = map.get(selectItem);
+                if (!columns.isEmpty()) {
+                    Column column = columns.get(0);
+                    for (int j = 0; j < selectResult.getClassName().length; j++) {
+                        if (column.getTable() != null) {
+                            if ((selectResult.getClassName()[j].equals(column.getTable().getName())
+                                    || selectResult.getAlias()[j].equals(column.getTable().getName()))
+                                    && selectResult.getAttrname()[j].equals(column.getColumnName())) {
+                                tempI = j;
+                                break;
+                            }
+                        } else {
+                            if (selectResult.getAttrname()[j].equals(column.getColumnName())) {
+                                tempI = j;
+                                break;
+                            }
                         }
                     }
                 }
@@ -318,10 +323,9 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
         return result;
     }
 
-    private ArrayList<Object> solveAggregationFunction(HashMap<Object,ArrayList<Tuple>> resultMap, String funcName, int pIndex) {
+    private ArrayList<Object> solveAggregationFunction(HashMap<Object,ArrayList<Tuple>> resultMap, String funcName, int pIndex, List<Object> sortedKeys) {
         ArrayList<Object> res = new ArrayList<>();
-        for (Object k :
-                resultMap.keySet()) {
+        for (Object k : sortedKeys) {
             ArrayList<Tuple> tuples = resultMap.get(k);
             List<Double> temp=new ArrayList<Double>();
             for (Tuple t : tuples) {

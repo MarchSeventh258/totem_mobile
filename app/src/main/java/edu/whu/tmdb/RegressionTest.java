@@ -106,10 +106,10 @@ public class RegressionTest {
         check("select score, COUNT(id), AVG(score), SUM(score), MIN(score), MAX(score) from Student GROUP BY score;",
             "Student\n" +
             "|score               |COUNT(id)           |AVG(score)          |SUM(score)          |MIN(score)          |MAX(score)          |\n" +
-            "|90                  |1.00                |90.00               |90.00               |90.00               |90.00               |\n" +
             "|60                  |1.00                |60.00               |60.00               |60.00               |60.00               |\n" +
             "|72                  |1.00                |72.00               |72.00               |72.00               |72.00               |\n" +
-            "|85                  |1.00                |85.00               |85.00               |85.00               |85.00               |\n");
+            "|85                  |1.00                |85.00               |85.00               |85.00               |85.00               |\n" +
+            "|90                  |1.00                |90.00               |90.00               |90.00               |90.00               |\n");
     }
 
     // ==================== GROUP BY ====================
@@ -125,11 +125,11 @@ public class RegressionTest {
         check("select score, COUNT(id) from Student GROUP BY score;",
             "Student\n" +
             "|score               |COUNT(id)           |\n" +
-            "|88                  |1.00                |\n" +
-            "|90                  |1.00                |\n" +
             "|60                  |1.00                |\n" +
             "|72                  |1.00                |\n" +
-            "|85                  |1.00                |\n");
+            "|85                  |1.00                |\n" +
+            "|88                  |1.00                |\n" +
+            "|90                  |1.00                |\n");
     }
 
     // ==================== ORDER BY ====================
@@ -292,9 +292,9 @@ public class RegressionTest {
         check("select * from year_songnumber;",
             "year_songnumber\n" +
             "|date                |song_count          |\n" +
-            "|2017                |1.00                |\n" +
+            "|2012                |1.00                |\n" +
             "|2014                |1.00                |\n" +
-            "|2012                |1.00                |\n");
+            "|2017                |1.00                |\n");
     }
 
     // ==================== 跨类查询 ====================
