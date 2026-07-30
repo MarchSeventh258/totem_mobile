@@ -35,6 +35,9 @@ public class RegressionTest {
         testNonStrictSelectDeputy();
         testNonStrictErrorCases();
         testNonStrictUpdateMigration();
+        testSelectHaving();
+        testGroupDeputyHavingCreation();
+        testGroupDeputyHavingMigration();
 
         System.out.println("========================================");
         System.out.println("  " + passed + " passed, " + failed + " failed");
@@ -355,15 +358,14 @@ public class RegressionTest {
             "|Alice               |55                  |\n");
     }
 
-    // ==================== Non-strict SelectDeputy ====================
+    // ==================== 非严格 SelectDeputy ====================
 
     static void testNonStrictSelectDeputy() {
         section("Non-strict SelectDeputy");
-        exec("DROP CLASS Emp;");
         ddl("CREATE TABLE Emp (id INT, name STRING, dept STRING);");
-        ddl("INSERT INTO Emp VALUES (1, 'Alice', 'IT');");
-        ddl("INSERT INTO Emp VALUES (2, 'Bob', 'HR');");
-        ddl("INSERT INTO Emp VALUES (3, 'Charlie', 'IT');");
+        ddl("INSERT INTO Emp VALUES (1, 'Alice', 'HR');");
+        ddl("INSERT INTO Emp VALUES (2, 'Bob', 'IT');");
+        ddl("INSERT INTO Emp VALUES (3, 'Charlie', 'HR');");
         ddl("CREATE SELECTDEPUTY EmpHR AS SELECT id, name FROM Emp;");
         check("select * from EmpHR;",
             "EmpHR\n" +
@@ -408,6 +410,96 @@ public class RegressionTest {
             "EmpHR\n" +
             "|id                  |name                |\n" +
             "|4                   |Diana2              |\n");
+    }
+
+    // ==================== SELECT HAVING ====================
+
+    static void testSelectHaving() {
+        section("SELECT HAVING");
+        ddl("DELETE FROM Student WHERE id > 0;");
+        ddl("INSERT INTO Student VALUES (1, 'Alice', 85);");
+        ddl("INSERT INTO Student VALUES (2, 'Bob', 72);");
+        ddl("INSERT INTO Student VALUES (3, 'Charlie', 90);");
+        ddl("INSERT INTO Student VALUES (4, 'Diana', 60);");
+        ddl("INSERT INTO Student VALUES (5, 'Eve', 88);");
+        ddl("INSERT INTO Student VALUES (6, 'Frank', 85);");
+        check("select score, COUNT(id) from Student GROUP BY score HAVING COUNT(id) > 1;",
+            "Student\n" +
+            "|score               |COUNT(id)           |\n" +
+            "|85                  |2.00                |\n");
+        // HAVING >= boundary: all groups satisfy
+        check("select score, COUNT(id) from Student GROUP BY score HAVING COUNT(id) >= 1;",
+            "Student\n" +
+            "|score               |COUNT(id)           |\n" +
+            "|60                  |1.00                |\n" +
+            "|72                  |1.00                |\n" +
+            "|85                  |2.00                |\n" +
+            "|88                  |1.00                |\n" +
+            "|90                  |1.00                |\n");
+    }
+
+    // ==================== GroupDeputy HAVING ====================
+
+    static void testGroupDeputyHavingCreation() {
+        section("GroupDeputy HAVING Creation");
+        ddl("DELETE FROM Student WHERE id > 0;");
+        ddl("INSERT INTO Student VALUES (1, 'Alice', 85);");
+        ddl("INSERT INTO Student VALUES (2, 'Bob', 85);");
+        ddl("INSERT INTO Student VALUES (3, 'Charlie', 90);");
+        ddl("CREATE GROUPDEPUTY PopularScore AS " +
+            "SELECT score, COUNT(id) as cnt FROM Student GROUP BY score HAVING COUNT(id) > 1;");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |2.00                |\n");
+    }
+
+    static void testGroupDeputyHavingMigration() {
+        section("GroupDeputy HAVING Migration");
+
+        // INSERT: add to 85 group → still satisfies HAVING, deputy updated
+        ddl("INSERT INTO Student VALUES (4, 'Diana', 85);");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |3.00                |\n");
+
+        // INSERT: new group 90 now has 2 → should appear (if HAVING satisfied)
+        ddl("INSERT INTO Student VALUES (5, 'Eve', 90);");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |3.00                |\n" +
+            "|90                  |2.00                |\n");
+
+        // DELETE: remove from 90 group → below HAVING threshold, group removed
+        ddl("DELETE FROM Student WHERE id = 5;");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |3.00                |\n");
+
+        // UPDATE: change score 85 to 72 → 85 group shrinks, stays above threshold
+        ddl("UPDATE Student SET score = 72 WHERE id = 4;");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |2.00                |\n");
+
+        // UPDATE: 85 group drops below HAVING threshold → 85 removed,
+        // 72 group gains a member → crosses threshold → 72 created
+        ddl("UPDATE Student SET score = 72 WHERE id = 2;");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|72                  |2.00                |\n");
+
+        // UPDATE: 72→85 → 72 drops below threshold (removed), 85 crosses back (created)
+        ddl("UPDATE Student SET score = 85 WHERE id = 2;");
+        check("select * from PopularScore;",
+            "PopularScore\n" +
+            "|score               |cnt                 |\n" +
+            "|85                  |2.00                |\n");
     }
 
     // ==================== 辅助方法 ====================

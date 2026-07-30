@@ -167,30 +167,30 @@ public class UpdateImpl implements Update {
      * 对分组属性更新，可能改bipointer，可能不改
      */
     public void update(TupleList tupleList, int[] indexs, Object[] updateValue, int classId, ArrayList<String> setAttrNames, String whereAttrName) throws TMDBException, IOException {
+        // 0. Capture old group values for GroupDeputy reconciliation
+        java.util.List<Object[]> oldGroupRefs = new java.util.ArrayList<>();
+        for (Tuple tuple : tupleList.tuplelist) {
+            for (BiPointerTableItem bpi : MemConnect.getBiPointerTableList()) {
+                if (bpi.objectid == tuple.tupleId && DeputyUtils.isGroupDeputy(bpi.deputyid)) {
+                    String grpAttr = GroupDeputyHelper.getGroupAttr(classId, bpi.deputyid);
+                    if (!grpAttr.isEmpty()) {
+                        int idx = memConnect.getAttrid(classId, grpAttr);
+                        if (idx >= 0 && idx < tuple.tuple.length) {
+                            oldGroupRefs.add(new Object[]{bpi.deputyid, tuple.tuple[idx]});
+                        }
+                    }
+                }
+            }
+        }
+
         // 1.更新源类tuple
         ArrayList<Integer> updateIdList = new ArrayList<>();
-        Set<Integer> groupDeputyTupleIdSet = new HashSet<>(); // 存储group代理类元组的ID，确保唯一性
-        HashMap<Integer, Tuple> oldDptOid2newObjs = new HashMap<>(); //存储代理oid到更新后的tuple的映射关系
         for (Tuple tuple : tupleList.tuplelist) {
             for (int i = 0; i < indexs.length; i++) {
                 tuple.tuple[indexs[i]] = updateValue[i];
             }
             memConnect.UpateTuple(tuple, tuple.getTupleId());
             updateIdList.add(tuple.getTupleId());
-            List<Integer> dptObjIds = getDeputyObjIdList(tuple.getTupleId());
-            for(int i : dptObjIds) {
-                oldDptOid2newObjs.put(i, tuple);
-            }
-            // 查找代理类元组并添加到代理类ID列表
-            List<BiPointerTableItem> biPointerTableList = MemConnect.getBiPointerTableList();
-            for (BiPointerTableItem biPointerTableItem : biPointerTableList) {
-                if (biPointerTableItem.objectid == tuple.tupleId) {
-                    // 将group代理的单独列出
-                    if (getdeputyrule(biPointerTableItem.deputyid, 1) == "groupdeputy") {
-                        groupDeputyTupleIdSet.add(biPointerTableItem.deputyobjectid);
-                    }
-                }
-            }
         }
         HashSet<Integer> deputyset = new HashSet<>();
         // 2.根据biPointerTable找到对应的deputyTuple
@@ -204,9 +204,10 @@ public class UpdateImpl implements Update {
                 deputyTupleList.addTuple(tuple);
             }
         }
-        if (deputyTupleIdList.isEmpty()) { return; }
+        // 3-4. Propagate to non-Group deputies (only when deputy tuples exist)
+        if (!deputyTupleIdList.isEmpty()) {
 
-        // 3.获取deputyTupleId->...的哈希映射列表 
+        // 3.获取deputyTupleId->...的哈希映射列表
         //   判断修改列是否为join连接条件 by zmjk
         boolean isLink = false;
         boolean aboutdeputy = true;
@@ -219,12 +220,12 @@ public class UpdateImpl implements Update {
                     deputyId2AttrId.put(switchingTableItem.deputyId, new ArrayList<>());
                     deputyId2UpdateValue.put(switchingTableItem.deputyId, new ArrayList<>());
                 }
-                if(switchingTableItem.rule=="joindeputy"){
-                    ArrayList<String> joinColumns = extractColumnNames(getdeputyrule(switchingTableItem.deputyId,2));
+                if(DeputyUtils.JOIN_DEPUTY.equalsIgnoreCase(switchingTableItem.rule)){
+                    ArrayList<String> joinColumns = extractColumnNames(getdeputyrule(switchingTableItem.deputyId,3));
                     String oriAttrName = memConnect.getColumn(switchingTableItem.oriId, switchingTableItem.oriAttrid);
                     if(joinColumns.contains(oriAttrName)){
                         isLink = true;
-                    }  
+                    }
                 }
                 deputyId2AttrId.get(switchingTableItem.deputyId).add(switchingTableItem.deputyAttrId);
                 int tempIndex = collect.indexOf(switchingTableItem.oriAttrid);
@@ -234,11 +235,11 @@ public class UpdateImpl implements Update {
 
         // 4.递归修改所有代理类
         for (int deputyId : deputyset)//遍历每个代理类，在这里处理非group的情况
-        {   
+        {
             switch (getdeputyrule(deputyId, 1)) {
-                case "joindeputy":   
+                case "joindeputy":
                 {
-                    if(isLink||aboutdeputy) //如果更新了连接条件或涉及代理规则相关属性的更改，要删除不符合代理规则的元组和BiPointerTableItem，增加新的符合代理规则的元组和BiPointerTableItem 
+                    if(isLink||aboutdeputy) //如果更新了连接条件或涉及代理规则相关属性的更改，要删除不符合代理规则的元组和BiPointerTableItem，增加新的符合代理规则的元组和BiPointerTableItem
                     {
                         String stmt = getdeputyrule(deputyId,0);
                         Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
@@ -266,19 +267,19 @@ public class UpdateImpl implements Update {
                                     if (processedClassNames.contains(className)) {
                                         continue;
                                     }
-                                    processedClassNames.add(className);   
+                                    processedClassNames.add(className);
                                 }
                                 InsertImpl insertImpl = new InsertImpl();
                                 for (int i = 0; i < objectNum; i++) {
                                     Tuple t = inserttuplelist.tuplelist.get(i);
                                     int deputyObjectId = insertImpl.executeOne(deputyId, attrNamesList, new Tuple(
-                                        t.tupleSize, 
-                                        t.tupleId, 
-                                        t.classId, 
-                                        t.tupleIds.clone(), 
-                                        t.tuple.clone(), 
+                                        t.tupleSize,
+                                        t.tupleId,
+                                        t.classId,
+                                        t.tupleIds.clone(),
+                                        t.tuple.clone(),
                                         t.delete));
-                        
+
                                     // 创建 BiPointerTableItem 对象并设置相关
                                     Map<String, Integer> classTupleMap = new HashMap<>();
                                     for (int j = 0; j < classNames.length; j++) {
@@ -287,7 +288,7 @@ public class UpdateImpl implements Update {
                                     for(String className : processedClassNames){
                                         int originId = memConnect.getClassId(className);
                                         BiPointerTableItem biPointerItem = new BiPointerTableItem(originId, classTupleMap.get(className), deputyId, deputyObjectId);
-            
+
                                         // 使用 MemConnect.getBiPointerTableList().add() 插入 BiPointerTable
                                         MemConnect.getBiPointerTableList().add(biPointerItem);
                                     }
@@ -314,7 +315,7 @@ public class UpdateImpl implements Update {
                         update(updateTupleList, nextIndexs, nextUpdate, deputyId,null,null);
                         }
                 }break;
-                case "groupdeputy":  
+                case "groupdeputy":
                 {
                     break;
                 }
@@ -329,7 +330,7 @@ public class UpdateImpl implements Update {
                     int[] nextIndexs = deputyId2AttrId.get(deputyId).stream().mapToInt(Integer -> Integer).toArray();
                     Object[] nextUpdate = deputyId2UpdateValue.get(deputyId).toArray();
                     update(updateTupleList, nextIndexs, nextUpdate, deputyId,null,null);
-                }   
+                }
                 break;
                 default:
                 {
@@ -347,164 +348,41 @@ public class UpdateImpl implements Update {
             }
         }
 
-        // 处理group代理类
-        if (!groupDeputyTupleIdSet.isEmpty()) { 
-            for (int deputyTupleId : groupDeputyTupleIdSet) {
-                // 这里拿到的tuple是还没更新的代理类元组
-                Tuple tuple = memConnect.GetTuple(deputyTupleId);
-                // 获取代理属性名
-                String groupAttr = "";
-                for(SwitchingTableItem switchingTableItem : MemConnect.getSwitchingTableList()) {
-                    if(switchingTableItem.oriId ==classId && switchingTableItem.deputyId == tuple.classId) {
-                        groupAttr = switchingTableItem.oriAttr;
-                        break;
-                    }
+        } // end if (!deputyTupleIdList.isEmpty())
+
+        // 5. Reconcile GroupDeputy: old groups (may be empty after update)
+        for (Object[] ref : oldGroupRefs) {
+            GroupDeputyHelper.reconcileGroup(classId, (int)ref[0], ref[1]);
+        }
+        // Reconcile GroupDeputy: new group values via existing BiPointers
+        // Snapshot to avoid ConcurrentModificationException when reconcileGroup
+        // modifies BiPointerTableList via rebuildBiPointers.
+        java.util.List<BiPointerTableItem> bpSnapshot = new java.util.ArrayList<>(MemConnect.getBiPointerTableList());
+        for (Tuple tuple : tupleList.tuplelist) {
+            for (BiPointerTableItem bpi : bpSnapshot) {
+                if (bpi.objectid != tuple.tupleId) continue;
+                if (!DeputyUtils.isGroupDeputy(bpi.deputyid)) continue;
+                String grpAttr = GroupDeputyHelper.getGroupAttr(classId, bpi.deputyid);
+                if (grpAttr.isEmpty()) continue;
+                int idx = memConnect.getAttrid(classId, grpAttr);
+                if (idx >= 0 && idx < tuple.tuple.length) {
+                    GroupDeputyHelper.reconcileGroup(classId, bpi.deputyid, tuple.tuple[idx]);
                 }
-
-                Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
-                SelectResult selectResult = null;
-                int deputyClassId = tuple.classId;
-
-                // 初始化分组依据以及聚合列信息
-                Object groupObj = tuple.tuple[0];
-                ArrayList<String> funcNames = new ArrayList<>();
-                ArrayList<Integer> pIndexs = new ArrayList<>();
-                for (SwitchingTableItem sti : MemConnect.getSwitchingTableList()) {
-                    if(classId == sti.oriId && deputyClassId == sti.deputyId) {
-                        if(!Objects.equals(sti.oriAttr, sti.deputyAttr)) { // 聚合列的源列名是不带聚合函数的，代理列名是带聚合函数的
-                            funcNames.add(sti.rule);
-                            pIndexs.add(memConnect.getAttrid(classId, sti.oriAttr));
-                        }
-                    }
+            }
+        }
+        // Reconcile GroupDeputy: new group values (may not have BiPointers yet)
+        java.util.HashSet<String> reconciled = new java.util.HashSet<>();
+        for (Tuple tuple : tupleList.tuplelist) {
+            for (int deputyId : memConnect.getDeputyIdList(classId)) {
+                if (!DeputyUtils.isGroupDeputy(deputyId)) continue;
+                String grpAttr = GroupDeputyHelper.getGroupAttr(classId, deputyId);
+                if (grpAttr.isEmpty()) continue;
+                int idx = memConnect.getAttrid(classId, grpAttr);
+                if (idx < 0 || idx >= tuple.tuple.length) continue;
+                String key = deputyId + "|" + tuple.tuple[idx];
+                if (reconciled.add(key)) {
+                    GroupDeputyHelper.reconcileGroup(classId, deputyId, tuple.tuple[idx]);
                 }
-                // 执行对分组依据的查询（如果有索引，那么效率为log复杂度）
-                try {
-                    String sql = "select * from " + memConnect.getClassName(classId) + " where " + groupAttr + " = " + groupObj.toString() + ";";
-                    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sql.getBytes());
-                    Statement selectstmt = CCJSqlParserUtil.parse(byteArrayInputStream);
-                    selectResult = transaction.query("", -1, selectstmt);
-                }catch (JSQLParserException e) {
-                    System.out.println("syntax error");
-                }
-
-                TupleList changedList = selectResult.getTpl();
-                SelectImpl selecttemp = new SelectImpl();
-                Tuple t = selecttemp.aggOne(groupObj, changedList, funcNames, pIndexs);
-
-                if (setAttrNames.contains(groupAttr)) { // 要set分组属性
-                    // 取得分组属性（在源类中）的索引，并且找到源类中这个属性的新值
-                    int groupAttrIdx = memConnect.getAttrid(classId, groupAttr);
-                    Tuple newOriTuple = oldDptOid2newObjs.get(tuple.tupleId);
-                    // if (newOriTuple == null) { return; } // 有可能没有源对象，直接返回
-                    // for (Map.Entry<Integer, Tuple> entry : oldDptOid2newObjs.entrySet()) {
-                    //     Integer key = entry.getKey();
-                    //     Object[] valueArray = entry.getValue().tuple;
-                    //     System.out.println("Key: " + key + ", Value: " + Arrays.toString(valueArray));
-                    // }
-
-                    if (Objects.equals(groupAttr, whereAttrName)) { // where条件也是分组属性，相当于整个分组要改名
-                        // 先删除旧分组
-                        DeleteImpl deletetemp = new DeleteImpl();
-                        deletetemp.deleteTupleOnly(tuple);
-                        int oldGroupSize = 0; // 统计旧分组有多少被改了
-                        for (BiPointerTableItem bpi : memConnect.getBiPointerTableList()) {
-                            if(bpi.deputyobjectid == tuple.tupleId) {
-                                oldGroupSize+=1;
-                            }
-                        }
-                        // 对新结果进行查询，funcname和pindex可以沿用上次查询
-                        Object newObj = newOriTuple.tuple[groupAttrIdx];
-                        try {
-                            String sql = "select * from " + memConnect.getClassName(classId) + " where " + groupAttr + " = " + newObj.toString() + ";";
-                            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sql.getBytes());
-                            Statement selectstmt = CCJSqlParserUtil.parse(byteArrayInputStream);
-                            selectResult = transaction.query("", -1, selectstmt);
-                        }catch (JSQLParserException e) {
-                            System.out.println("syntax error");
-                        }
-                        TupleList newList = selectResult.getTpl();
-                        Tuple newt = selecttemp.aggOne(newObj, newList, funcNames, pIndexs);
-
-                        // 全部换到一个新分组
-                        if(newList.tuplenum == oldGroupSize) {
-                            String dptName = memConnect.getClassName(deputyClassId);
-                            InsertImpl inserttemp = new InsertImpl();
-                            int inserttupleid= inserttemp.executeOne(deputyClassId, memConnect.getColumns(dptName), newt);
-                            setDeputyObjId(tuple.tupleId, inserttupleid);
-                        }
-                        // 全部换到一个已有分组
-                        else {
-                            // 找到换进分组的分组依据代理对象id
-                            TupleList oldDeputyTpl = memConnect.getTupleList(deputyClassId);
-                            int groupObjDptId = -1;
-                            Tuple oldt = null;
-                            for(Tuple tempt : oldDeputyTpl.tuplelist) {
-                                if(Objects.equals(tempt.tuple[0], newObj)) {
-                                    groupObjDptId = tempt.tupleId;
-                                    oldt = tempt;
-                                }
-                            }
-                            updateOne(oldt, newt);
-                            setDeputyObjId(tuple.tupleId, groupObjDptId);
-                        }
-                    }
-                    else { // 对分组的一部分进行了调整
-                        // 检查是否进行了换组，如果当前分组属性值与更新后对应的值一样就没有换组
-                        if (Objects.equals(groupObj, newOriTuple.tuple[groupAttrIdx])) {
-                            updateOne(tuple, t);
-                        }
-                        else { // 换组了，也需要算出旧组的值，并更新bipointer指向新组
-                            // 先更新旧组，如果旧组空了，就删除
-                            if(changedList.tuplenum == 0) {
-                                DeleteImpl deletetemp = new DeleteImpl();
-                                deletetemp.deleteTupleOnly(tuple);
-                            }
-                            else {
-                                updateOne(tuple, t);
-                            }
-
-                            // 对新结果进行查询，funcname和pindex可以沿用上次查询
-                            Object newObj = newOriTuple.tuple[groupAttrIdx];
-                            try {
-                                String sql = "select * from " + memConnect.getClassName(classId) + " where " + groupAttr + " = " + newObj.toString() + ";";
-                                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sql.getBytes());
-                                Statement selectstmt = CCJSqlParserUtil.parse(byteArrayInputStream);
-                                selectResult = transaction.query("", -1, selectstmt);
-                            }catch (JSQLParserException e) {
-                                System.out.println("syntax error");
-                            }
-                            TupleList newList = selectResult.getTpl();
-                            Tuple newt = selecttemp.aggOne(newObj, newList, funcNames, pIndexs);
-
-                            // 换到新的分组
-                            if(newList.tuplenum == 1) {
-                                // 直接插入一条新记录，然后更新双指针表
-                                String dptName = memConnect.getClassName(deputyClassId);
-                                InsertImpl inserttemp = new InsertImpl();
-                                int inserttupleid= inserttemp.executeOne(deputyClassId, memConnect.getColumns(dptName), newt);
-                                setDeputyObjId(newOriTuple.tupleId, tuple.tupleId, inserttupleid);
-                            }
-                            else {
-                                // 找到换进分组的分组依据代理对象id
-                                TupleList oldDeputyTpl = memConnect.getTupleList(deputyClassId);
-                                int groupObjDptId = -1;
-                                Tuple oldt = null;
-                                for(Tuple tempt : oldDeputyTpl.tuplelist) {
-                                    if(Objects.equals(tempt.tuple[0], newObj)) {
-                                        groupObjDptId = tempt.tupleId;
-                                        oldt = tempt;
-                                    }
-                                }
-                                updateOne(oldt, newt);
-                                setDeputyObjId(newOriTuple.tupleId, tuple.tupleId, groupObjDptId);
-                            }
-                        }
-                    }
-                }
-                else { // 组内更新，新的结果已经求出，直接update一条tuple即可
-                    updateOne(tuple, t);
-                }
-            
             }
         }
     }

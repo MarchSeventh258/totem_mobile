@@ -6,6 +6,7 @@ import edu.whu.tmdb.query.operations.Exception.ErrorList;
 import edu.whu.tmdb.query.operations.Exception.TMDBException;
 import edu.whu.tmdb.storage.memory.Tuple;
 import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.LongValue;
 import net.sf.jsqlparser.expression.Parenthesis;
 import net.sf.jsqlparser.expression.SignedExpression;
@@ -53,6 +54,9 @@ public class Formula {
                 break;
             case "SignedExpression":
                 dataList = signedExpression((SignedExpression) expression, selectResult);
+                break;
+            case "Function":
+                dataList = functionRef((Function) expression, selectResult);
                 break;
         }
         return dataList;
@@ -188,6 +192,35 @@ public class Formula {
             res.add(data);
         }
         return res;
+    }
+
+    // Resolve an aggregate function reference (e.g. COUNT(id)) in a
+    // HAVING clause by matching the function text against both
+    // attrname and alias columns.
+    private ArrayList<Object> functionRef(Function function, SelectResult selectResult) throws TMDBException {
+        String funcText = function.toString();
+        String normalized = funcText.replaceAll("\\s+", "").toLowerCase();
+
+        for (int i = 0; i < selectResult.getAttrname().length; i++) {
+            String attrNorm = selectResult.getAttrname()[i].replaceAll("\\s+", "").toLowerCase();
+            String aliasNorm = selectResult.getAlias() != null && selectResult.getAlias()[i] != null
+                ? selectResult.getAlias()[i].replaceAll("\\s+", "").toLowerCase() : "";
+
+            if (normalized.equals(attrNorm) || normalized.equals(aliasNorm)) {
+                ArrayList<Object> dataList = new ArrayList<>();
+                for (Tuple tuple : selectResult.getTpl().tuplelist) {
+                    dataList.add(tuple.tuple[i]);
+                }
+                return dataList;
+            }
+        }
+        // Fallback: treat the inner expression as a column reference
+        if (function.getParameters() != null
+                && function.getParameters().getExpressions() != null
+                && !function.getParameters().getExpressions().isEmpty()) {
+            return formulaExecute(function.getParameters().getExpressions().get(0), selectResult);
+        }
+        throw new TMDBException(ErrorList.COLUMN_NAME_DOES_NOT_EXIST, funcText);
     }
 
     private void addToDataList(ArrayList<Object> dataList, String type, Object obj) throws TMDBException {

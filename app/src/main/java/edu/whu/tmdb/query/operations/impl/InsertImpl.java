@@ -135,7 +135,7 @@ public class InsertImpl implements Insert {
             if (tuple.tuple.length != columns.size()) {
                 throw new TMDBException();
             }
-            // Insert into source class
+            // Insert into source class (skip automatic non-strict propagation)
             int sourceTupleId = insertOne(classId, columns, tuple, attrNum, attrIdList);
             // Insert into deputy class and create BiPointer
             insertExplicitDeputyTuple(classId, deputyId, sourceTupleId, tuple);
@@ -144,6 +144,7 @@ public class InsertImpl implements Insert {
 
     /**
      * Validates that the target is a legal non-strict SelectDeputy of the source class.
+     * A strict deputy must not accept manual INTO.
      */
     private void validateExplicitDeputy(int sourceClassId, int deputyClassId) throws TMDBException {
         if (!DeputyUtils.isDeputyOf(sourceClassId, deputyClassId)) {
@@ -340,7 +341,7 @@ public class InsertImpl implements Insert {
                 Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
                 SelectResult selectResult = null;
                 String deputyname = memConnect.getClassName(deputyClassId);
-                if(Objects.equals(deputyquery(classId, deputyClassId), "joindeputy")) //处理join代理
+                if (DeputyUtils.isType(deputyClassId, DeputyUtils.JOIN_DEPUTY))
                 {   
                     try {
                         ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(stmt.getBytes());
@@ -378,60 +379,12 @@ public class InsertImpl implements Insert {
                         }
                     }
                 }
-                else if (Objects.equals(deputyquery(classId, deputyClassId), "groupdeputy")) {
-                    // 获得分组依据，聚合函数名以及聚合值的索引下标
-                    String groupAttr = getDeputyAttr(classId, deputyClassId);
-                    int groupAttrIdx = memConnect.getAttrid(classId, groupAttr);
-                    Object groupObj = temp[groupAttrIdx];
-                    ArrayList<String> funcNames = new ArrayList<>();
-                    ArrayList<Integer> pIndexs = new ArrayList<>();
-                    for (SwitchingTableItem sti : MemConnect.getSwitchingTableList()) {
-                        if(classId == sti.oriId && deputyClassId == sti.deputyId) {
-                            if(!Objects.equals(sti.oriAttr, sti.deputyAttr)) { // 聚合列的源列名是不带聚合函数的，代理列名是带聚合函数的
-                                funcNames.add(sti.rule);
-                                pIndexs.add(memConnect.getAttrid(classId, sti.oriAttr));
-                            }
-                        }
-                    }
-
-                    // 执行对分组依据的查询（如果有索引，那么效率为log复杂度）
-                    try {
-                        String sql = "select * from " + memConnect.getClassName(classId) + " where " + groupAttr + " = " + groupObj.toString() + ";";
-                        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sql.getBytes());
-                        Statement selectstmt = CCJSqlParserUtil.parse(byteArrayInputStream);
-                        selectResult = transaction.query("", -1, selectstmt);
-                    }catch (JSQLParserException e) {
-                        System.out.println("syntax error");
-                    }
-                    TupleList changedList = selectResult.getTpl();
-
-                    // 在这里已经得到了resultMap中的obg, list<tuple>，也就是groupobj和changedlist.tpl，再次对这些进行分组计算
-                    SelectImpl selecttemp = new SelectImpl();
-                    Tuple t = selecttemp.aggOne(groupObj, changedList, funcNames, pIndexs);
-
-                    // 插入新的分组
-                    if(changedList.tuplenum == 1) {
-                        // 直接插入一条新记录，然后更新双指针表
-                        int inserttupleid= executeOne(deputyClassId, memConnect.getColumns(deputyname), t);
-                        MemConnect.getBiPointerTableList().add(new BiPointerTableItem(classId, tupleid, deputyClassId, inserttupleid));
-                    }
-                    // 插入已有的分组
-                    else {
-                        // 找到分组依据的代理对象id
-                        TupleList oldDeputyTpl = memConnect.getTupleList(deputyClassId);
-                        int groupObjDptId = -1;
-                        Tuple oldt = null;
-                        for(Tuple tempt : oldDeputyTpl.tuplelist) {
-                            if(Objects.equals(tempt.tuple[0], groupObj)) {
-                                groupObjDptId = tempt.tupleId;
-                                oldt = tempt;
-                            }
-                        }
-                        // 把新聚合结果给旧tuple
-                        UpdateImpl updatetemp = new UpdateImpl();
-                        updatetemp.updateOne(oldt, t);
-                        // 插入双指针表
-                        MemConnect.getBiPointerTableList().add(new BiPointerTableItem(classId, tupleid, deputyClassId, groupObjDptId));
+                else if (DeputyUtils.isGroupDeputy(deputyClassId)) {
+                    String groupAttr = GroupDeputyHelper.getGroupAttr(classId, deputyClassId);
+                    if (!groupAttr.isEmpty()) {
+                        int groupAttrIdx = memConnect.getAttrid(classId, groupAttr);
+                        Object groupObj = temp[groupAttrIdx];
+                        GroupDeputyHelper.reconcileGroup(classId, deputyClassId, groupObj);
                     }
                 }
                 else {

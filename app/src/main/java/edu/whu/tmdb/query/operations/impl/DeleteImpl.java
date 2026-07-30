@@ -112,7 +112,24 @@ public class DeleteImpl implements Delete {
 
         int classId = tupleList.tuplelist.get(0).classId;
         ArrayList<Integer> DeputyIdList = memConnect.getDeputyIdList(classId);
-    
+
+        // 0. Capture GroupDeputy group values before deletion
+        java.util.List<Object[]> oldGroupRefs = new java.util.ArrayList<>();
+        for (int i = 0; i < tupleListSize; i++) {
+            Tuple tuple = tupleList.tuplelist.get(i);
+            for (BiPointerTableItem bpi : MemConnect.getBiPointerTableList()) {
+                if (bpi.objectid == tuple.tupleId && DeputyUtils.isGroupDeputy(bpi.deputyid)) {
+                    String grpAttr = GroupDeputyHelper.getGroupAttr(classId, bpi.deputyid);
+                    if (!grpAttr.isEmpty()) {
+                        int idx = memConnect.getAttrid(classId, grpAttr);
+                        if (idx >= 0 && idx < tuple.tuple.length) {
+                            oldGroupRefs.add(new Object[]{bpi.deputyid, tuple.tuple[idx]});
+                        }
+                    }
+                }
+            }
+        }
+
         // 1.删除源类tuple和object table
         for (int i = 0; i < tupleListSize; i++) {
             Tuple tuple = tupleList.tuplelist.get(i);
@@ -136,7 +153,7 @@ public class DeleteImpl implements Delete {
             for (BiPointerTableItem biPointerTableItem : biPointerTableList) {
                 if (biPointerTableItem.objectid == tupleId) {
                     // 将group代理的单独列出
-                    if (getdeputyrule(biPointerTableItem.deputyid, 1) == "groupdeputy") {
+                    if (DeputyUtils.isGroupDeputy(biPointerTableItem.deputyid)) {
                         groupDeputyTupleIdSet.add(biPointerTableItem.deputyobjectid);
                     }
                     else {
@@ -154,7 +171,7 @@ public class DeleteImpl implements Delete {
             Iterator<BiPointerTableItem> iterator = MemConnect.getBiPointerTableList().iterator();
             while (iterator.hasNext()) {
                 BiPointerTableItem biPointerTableItem = iterator.next();
-                if(getdeputyrule(biPointerTableItem.deputyid,1)=="joindeputy" ){
+                if(DeputyUtils.isType(biPointerTableItem.deputyid, DeputyUtils.JOIN_DEPUTY)){
                     if (biPointerTableItem.objectid == tupleId||biPointerTableItem.deputyobjectid == tupleId) { 
                         iterator.remove();
                     }
@@ -179,72 +196,9 @@ public class DeleteImpl implements Delete {
             delete(deputyTupleList, colName);
         }
 
-        // 如果是需要特殊处理的group代理
-        if (!groupDeputyTupleIdSet.isEmpty()) { 
-            TupleList deputyTupleList = new TupleList(); // 如果删了整个分组，可以直接递归删除
-            for (int deputyTupleId : groupDeputyTupleIdSet) {
-                Tuple tuple = memConnect.GetTuple(deputyTupleId);
-                if (tuple != null) {
-                    // 获取分组属性的名称
-                    String groupAttr = "";
-                    for(SwitchingTableItem switchingTableItem : MemConnect.getSwitchingTableList()) {
-                        if(switchingTableItem.oriId ==classId && switchingTableItem.deputyId == tuple.classId) {
-                            groupAttr = switchingTableItem.oriAttr;
-                            break;
-                        }
-                    }
-                    // 如果删的就是分组属性，那么可以递归删除全部
-                    if(Objects.equals(colName, groupAttr)) {
-                        deputyTupleList.addTuple(tuple);
-                    }
-                    else {
-                        Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
-                        SelectResult selectResult = null;
-                        int deputyClassId = tuple.classId;
-
-                        // 初始化分组依据以及聚合列信息
-                        Object groupObj = tuple.tuple[0];
-                        ArrayList<String> funcNames = new ArrayList<>();
-                        ArrayList<Integer> pIndexs = new ArrayList<>();
-                        for (SwitchingTableItem sti : MemConnect.getSwitchingTableList()) {
-                            if(classId == sti.oriId && deputyClassId == sti.deputyId) {
-                                if(!Objects.equals(sti.oriAttr, sti.deputyAttr)) { // 聚合列的源列名是不带聚合函数的，代理列名是带聚合函数的
-                                    funcNames.add(sti.rule);
-                                    pIndexs.add(memConnect.getAttrid(classId, sti.oriAttr));
-                                }
-                            }
-                        }
-
-                        // 执行对分组依据的查询（如果有索引，那么效率为log复杂度）
-                        try {
-                            String sql = "select * from " + memConnect.getClassName(classId) + " where " + groupAttr + " = " + groupObj.toString() + ";";
-                            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sql.getBytes());
-                            Statement selectstmt = CCJSqlParserUtil.parse(byteArrayInputStream);
-                            selectResult = transaction.query("", -1, selectstmt);
-                        }catch (JSQLParserException e) {
-                            System.out.println("syntax error");
-                        }
-                        TupleList changedList = selectResult.getTpl();
-
-                        // 如果查询结果为空，那么直接递归删除
-                        if(changedList.tuplenum == 0) {
-                            deputyTupleList.addTuple(tuple);
-                        }
-                        else {
-                            // 算新的聚合结果
-                            SelectImpl selecttemp = new SelectImpl();
-                            Tuple t = selecttemp.aggOne(groupObj, changedList, funcNames, pIndexs);
-                            
-                            // 把新聚合结果给旧tuple
-                            UpdateImpl updatetemp = new UpdateImpl();
-                            updatetemp.updateOne(tuple, t);
-
-                            // 因为实际上没有删除，所以不用递归
-                        }
-                    }
-                }
-            }
-            delete(deputyTupleList, colName);
+        // Reconcile GroupDeputy after deletion
+        for (Object[] ref : oldGroupRefs) {
+            GroupDeputyHelper.reconcileGroup(classId, (int)ref[0], ref[1]);
         }
     }
     

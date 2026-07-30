@@ -9,8 +9,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import edu.whu.tmdb.query.operations.CreateDeputyClass;
@@ -126,6 +124,7 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
     
         TupleList tpl = selectResult.getTpl();
         int tupleNum = tpl.tuplenum;
+        // deputyrule: [0]=SQL, [1]=deputyType, [2]=strict/nonstrict marker, [3]=join condition
         String []deputyrule = new String[4];
         deputyrule[0] = selectStmt.toString();
         deputyrule[2] = "";
@@ -203,35 +202,48 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
                 // 将当前的 className 添加到 processedClassNames 中，表示已经处理过了
                 processedClassIds.add(originId);
             }
+            // Use JSqlParser AST to parse aggregate functions (not regex).
+            // This correctly handles COUNT(*), aliases, and nested expressions.
+            java.util.List<net.sf.jsqlparser.statement.select.SelectItem> selectItems =
+                ((net.sf.jsqlparser.statement.select.PlainSelect) selectStmt.getSelectBody())
+                    .getSelectItems();
             int attrNum = selectResult.getClassName().length;
             for (int i = 0; i < attrNum; i++) {
-                String dptName = selectResult.getAttrname()[i], oriName = null, type = null;
+                String dptName = selectResult.getAttrname()[i];
+                String oriName, type;
 
-                // 正则表达式匹配聚合函数，比如 min(age)
-                String regex = "(?i)^(avg|min|max|count|sum)\\((\\w+)\\)$";
-                Pattern pattern = Pattern.compile(regex);
-                Matcher matcher = pattern.matcher(dptName);
-
-                if (matcher.find()) {
-                    // 有聚合函数
-                    type = matcher.group(1).toLowerCase(); // 聚合类型
-                    oriName = matcher.group(2); // 原始字段名
+                if (i < selectItems.size()
+                        && selectItems.get(i) instanceof net.sf.jsqlparser.statement.select.SelectExpressionItem) {
+                    net.sf.jsqlparser.statement.select.SelectExpressionItem item =
+                        (net.sf.jsqlparser.statement.select.SelectExpressionItem) selectItems.get(i);
+                    if (item.getExpression() instanceof net.sf.jsqlparser.expression.Function) {
+                        net.sf.jsqlparser.expression.Function func =
+                            (net.sf.jsqlparser.expression.Function) item.getExpression();
+                        type = func.getName().toLowerCase();
+                        if (SelectImpl.isCountAll(func)) {
+                            oriName = "*";
+                        } else {
+                            oriName = func.getParameters().getExpressions().get(0).toString();
+                        }
+                    } else {
+                        type = "groupdeputy";
+                        oriName = dptName;
+                    }
                 } else {
-                    // 无聚合函数，默认 group
                     type = "groupdeputy";
                     oriName = dptName;
                 }
-                 // 创建 SwitchingTableItem
+
                 SwitchingTableItem switchingTableItem = new SwitchingTableItem(
-                memConnect.getClassId(selectResult.getClassName()[i]), // 源类 ID
-                selectResult.getAttrid()[i], // 源类属性 ID
-                oriName, // 源类属性名称
-                deputyId, // 代理类 ID
-                i, // 代理类属性 ID
-                dptName, // 代理类属性名称
-                type // 代理规则
-            );
-            MemConnect.getSwitchingTableList().add(switchingTableItem);
+                    memConnect.getClassId(selectResult.getClassName()[i]),
+                    selectResult.getAttrid()[i],
+                    oriName,
+                    deputyId,
+                    i,
+                    dptName,
+                    type
+                );
+                MemConnect.getSwitchingTableList().add(switchingTableItem);
             }
         }
         else {
@@ -324,6 +336,17 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
                     t.delete));
                 Object o =t.tuple[0];
                 ArrayList<Integer> idList = groupMap.get(o);
+                if (idList == null) {
+                    for (java.util.Map.Entry<Object, ArrayList<Integer>> e : groupMap.entrySet()) {
+                        if (String.valueOf(e.getKey()).equals(String.valueOf(o))) {
+                            idList = e.getValue();
+                            break;
+                        }
+                    }
+                }
+                if (idList == null) {
+                    continue;
+                }
                 // 创建 BiPointerTableItem 对象并设置相关
                 Map<String, Integer> classTupleMap = new HashMap<>();
                 for (int j = 0; j < classNames.length; j++) {
@@ -402,17 +425,6 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
         return selectExecutor.select(selectStmt);
     }
 
-    @SuppressWarnings("unused")
-    private HashSet<Integer> getOriginClass(SelectResult selectResult) {
-        ArrayList<String> collect = Arrays.stream(selectResult.getClassName()).collect(Collectors.toCollection(ArrayList::new));
-        HashSet<String> collect1 = Arrays.stream(selectResult.getClassName()).collect(Collectors.toCollection(HashSet::new));
-        HashSet<Integer> res = new HashSet<>();
-        for (String s : collect1) {
-            res.add(collect.indexOf(s));
-        }
-        return res;
-    }
-
     /**
      * A SelectDeputy is non-strict when its SELECT has no WHERE clause.
      * Non-strict deputies are populated manually via INSERT ... INTO deputyClass.
@@ -431,6 +443,17 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
      */
     public static boolean isNonStrictDeputy(int deputyClassId) {
         return DeputyUtils.isNonStrictSelectDeputy(deputyClassId);
+    }
+
+    @SuppressWarnings("unused")
+    private HashSet<Integer> getOriginClass(SelectResult selectResult) {
+        ArrayList<String> collect = Arrays.stream(selectResult.getClassName()).collect(Collectors.toCollection(ArrayList::new));
+        HashSet<String> collect1 = Arrays.stream(selectResult.getClassName()).collect(Collectors.toCollection(HashSet::new));
+        HashSet<Integer> res = new HashSet<>();
+        for (String s : collect1) {
+            res.add(collect.indexOf(s));
+        }
+        return res;
     }
 }
 

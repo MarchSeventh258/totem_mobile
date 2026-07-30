@@ -118,30 +118,34 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
             return deputySelect((PlainSelect) stmt);
         } // TODO-why?
 
-        // 以下是常规plainselect逻辑：from->where->select
-        // 1.调用from方法获取相关的所有元数据
+        // FROM → WHERE → GROUP BY → HAVING → Projection → ORDER BY → LIMIT
+        // 1. FROM
         SelectResult selectResult = from(plainSelect);
-        // 2.调用where对元数据进行进行筛选
+        // 2. WHERE
         if (plainSelect.getWhere() != null){
             Where where = new Where();
             selectResult = where.where(plainSelect, selectResult);
         }
-        if (plainSelect.getOrderByElements() != null) {
-            OrderBy orderBy = new OrderBy();
-            selectResult = orderBy.orderBy(plainSelect.getOrderByElements(), selectResult);
-        }
-        if (plainSelect.getLimit() != null){
-            selectResult = limit(Integer.parseInt(plainSelect.getLimit().getRowCount().toString()), selectResult);
-        }
+        // 3. GROUP BY → HAVING → Projection
         if(plainSelect.getGroupBy() != null){
             GroupBy groupBy = new GroupBy();
             HashMap<Object, ArrayList<Tuple>> hashMap = groupBy.groupBy(plainSelect, selectResult);
             selectResult = groupByElicit(plainSelect, hashMap, selectResult);
+            Having having = new Having();
+            selectResult = having.having(plainSelect, selectResult);
         }
-        else {//然后通过selectItem提取想要的列
+        else {
             selectResult = projection(plainSelect, selectResult);
         }
-        //最终返回selectResult
+        // 4. ORDER BY
+        if (plainSelect.getOrderByElements() != null) {
+            OrderBy orderBy = new OrderBy();
+            selectResult = orderBy.orderBy(plainSelect.getOrderByElements(), selectResult);
+        }
+        // 5. LIMIT
+        if (plainSelect.getLimit() != null){
+            selectResult = limit(Integer.parseInt(plainSelect.getLimit().getRowCount().toString()), selectResult);
+        }
         return selectResult;
     }
 
@@ -156,30 +160,34 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
             return deputySelect((PlainSelect) stmt);
         } // TODO-why?
 
-        // 以下是常规plainselect逻辑：from->where->select
-        // 1.调用joinfrom方法获取相关的所有元数据
+        // FROM → WHERE → GROUP BY → HAVING → Projection → ORDER BY → LIMIT
+        // 1. FROM (join)
         SelectResult selectResult = joinfrom(plainSelect,tupleList);
-        // 2.调用where对元数据进行进行筛选
+        // 2. WHERE
         if (plainSelect.getWhere() != null){
             Where where = new Where();
             selectResult = where.where(plainSelect, selectResult);
         }
-        if (plainSelect.getOrderByElements() != null) {
-            OrderBy orderBy = new OrderBy();
-            selectResult = orderBy.orderBy(plainSelect.getOrderByElements(), selectResult);
-        }
-        if (plainSelect.getLimit() != null){
-            selectResult = limit(Integer.parseInt(plainSelect.getLimit().getRowCount().toString()), selectResult);
-        }
+        // 3. GROUP BY → HAVING → Projection
         if(plainSelect.getGroupBy() != null){
             GroupBy groupBy = new GroupBy();
             HashMap<Object, ArrayList<Tuple>> hashMap = groupBy.groupBy(plainSelect, selectResult);
             selectResult = groupByElicit(plainSelect, hashMap, selectResult);
+            Having having = new Having();
+            selectResult = having.having(plainSelect, selectResult);
         }
-        else {//然后通过selectItem提取想要的列
+        else {
             selectResult = projection(plainSelect, selectResult);
         }
-        //最终返回selectResult
+        // 4. ORDER BY
+        if (plainSelect.getOrderByElements() != null) {
+            OrderBy orderBy = new OrderBy();
+            selectResult = orderBy.orderBy(plainSelect.getOrderByElements(), selectResult);
+        }
+        // 5. LIMIT
+        if (plainSelect.getLimit() != null){
+            selectResult = limit(Integer.parseInt(plainSelect.getLimit().getRowCount().toString()), selectResult);
+        }
         return selectResult;
     }
     private SelectResult limit(int limit, SelectResult selectResult) {
@@ -236,9 +244,10 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
 //            这里是针对selectItem是表达式的判定，a或者a+2或者a+b*c都会被认定为表达式
             if(selectItemList.get(i).getClass().getSimpleName().equals("SelectExpressionItem")){
                 SelectExpressionItem selectItem=(SelectExpressionItem) selectItemList.get(i);
-                //如果有alias 例如a*b as c则需要将输出的getAttrname()改成别名
+                // Store original expression in alias for HAVING resolution;
+                // attrname holds the user-visible alias/expression name.
                 if(selectItem.getAlias()!=null){
-                    result.getAlias()[i]=selectItem.getAlias().getName();
+                    result.getAlias()[i]=selectItem.getExpression().toString();
                     result.getAttrname()[i]=selectItem.getAlias().getName();
                 }
                 else {
@@ -255,16 +264,21 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
                 else{
                     Function func = (Function) selectItem.getExpression();
                     String funcName = func.getName();
-                    String p = func.getParameters().getExpressions().get(0).toString();
-                    int pIndex=-1;
-                    for (int j = 0; j < selectResult.getAttrname().length; j++) {
-                        if(p.equals(selectResult.getAttrname()[j])
-                        || p.equals(selectResult.getAlias()[j])){
-                            pIndex=j;
+                    int pIndex;
+                    if (isCountAll(func)) {
+                        pIndex = -1; // COUNT(*) counts every row
+                    } else {
+                        String p = func.getParameters().getExpressions().get(0).toString();
+                        pIndex = -1;
+                        for (int j = 0; j < selectResult.getAttrname().length; j++) {
+                            if(p.equals(selectResult.getAttrname()[j])
+                            || p.equals(selectResult.getAlias()[j])){
+                                pIndex=j;
+                            }
                         }
-                    }
-                    if(pIndex==-1){
-                        throw new TMDBException(/*2, p*/);
+                        if(pIndex==-1){
+                            throw new TMDBException(/*2, p*/);
+                        }
                     }
                     thisColumn=solveAggregationFunction(resultMap,funcName,pIndex,sortedKeys);
                 }
@@ -329,8 +343,10 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
             ArrayList<Tuple> tuples = resultMap.get(k);
             List<Double> temp=new ArrayList<Double>();
             for (Tuple t : tuples) {
-                if(t.tuple[pIndex]!=null) {
-                    temp.add(Double.parseDouble((String) t.tuple[pIndex]));
+                if (pIndex == -1) {
+                    temp.add(1.0); // COUNT(*)
+                } else if(t.tuple[pIndex]!=null) {
+                    temp.add(Double.parseDouble(String.valueOf(t.tuple[pIndex])));
                 }
             }
             double d=solveList(funcName,temp);
@@ -364,6 +380,16 @@ public class SelectImpl implements edu.whu.tmdb.query.operations.Select {
                         .sum();
             default: return -1;
         }
+    }
+
+    /** True when {@code func} is {@code COUNT(*)} (no column argument). */
+    public static boolean isCountAll(Function func) {
+        if (!"COUNT".equalsIgnoreCase(func.getName())) return false;
+        if (func.getParameters() == null) return true;
+        if (func.getParameters().getExpressions() == null
+                || func.getParameters().getExpressions().isEmpty()) return true;
+        String arg = func.getParameters().getExpressions().get(0).toString();
+        return "*".equals(arg.trim());
     }
 
     // 给定一个分组依据和它相关的原始tuple列表，返回聚合后的tuple
