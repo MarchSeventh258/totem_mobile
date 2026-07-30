@@ -200,10 +200,12 @@ public class Transaction {
             }
         } catch (JSQLParserException e) {
             logger.warn(e.getMessage());
+            throw new RuntimeException(e);
         } catch (IOException e) {
             logger.error(e.getMessage(),e);
         } catch (TMDBException e) {
             e.printError();
+            throw new RuntimeException(e);
         }
 
         return selectResult;
@@ -225,11 +227,11 @@ public class Transaction {
             logger.error(e.getMessage(),e);
         } catch (TMDBException e) {
             e.printError();
+            throw new RuntimeException(e);
         }
 
         return selectResult;
     }
-
     public void testMapMatching() {
         TorchConnect torchConnect = new TorchConnect(memConnect,"Torch_Porto_test");
 //        torchConnect.insert("data/res/raw/porto_raw_trajectory.txt");

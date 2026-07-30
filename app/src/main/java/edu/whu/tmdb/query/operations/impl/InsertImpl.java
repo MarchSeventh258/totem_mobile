@@ -11,6 +11,7 @@ import java.util.Objects;
 
 import edu.whu.tmdb.query.Transaction;
 import edu.whu.tmdb.query.operations.Insert;
+import edu.whu.tmdb.query.operations.Exception.ErrorList;
 import edu.whu.tmdb.query.operations.Exception.TMDBException;
 import edu.whu.tmdb.query.operations.utils.MemConnect;
 import edu.whu.tmdb.query.operations.utils.SelectResult;
@@ -39,25 +40,28 @@ public class InsertImpl implements Insert {
     @Override
     public ArrayList<Integer> insert(Statement stmt) throws TMDBException, IOException {
         net.sf.jsqlparser.statement.insert.Insert insertStmt = (net.sf.jsqlparser.statement.insert.Insert) stmt;
-        Table table = insertStmt.getTable();        // 解析insert对应的表
-        List<String> attrNames = new ArrayList<>(); // 解析插入的字段名
-        if (insertStmt.getColumns() == null){
+        Table table = insertStmt.getTable();
+        List<String> attrNames = new ArrayList<>();
+        if (insertStmt.getColumns() == null) {
             attrNames = memConnect.getColumns(table.getName());
-        }
-        else{
+        } else {
             int insertColSize = insertStmt.getColumns().size();
             for (int i = 0; i < insertColSize; i++) {
                 attrNames.add(insertStmt.getColumns().get(i).getColumnName());
             }
         }
 
-        // 对应含有子查询的插入语句
         SelectImpl select = new SelectImpl();
         SelectResult selectResult = select.select(insertStmt.getSelect());
-
-        // tuplelist存储需要插入的tuple部分
         TupleList tupleList = selectResult.getTpl();
-        execute(table.getName(), attrNames, tupleList);
+
+        // Handle explicit INTO deputyClass
+        Table deputyTable = insertStmt.getDeputyTable();
+        if (deputyTable != null) {
+            executeWithDeputy(table.getName(), attrNames, tupleList, deputyTable.getName());
+        } else {
+            execute(table.getName(), attrNames, tupleList);
+        }
         return tupleIdList;
     }
 
@@ -111,6 +115,88 @@ public class InsertImpl implements Insert {
         int tupleId = insertOne(classId, columns, tuple, attrNum, attridList);
         tupleIdList.add(tupleId);
         return tupleId;
+    }
+
+    /**
+     * INSERT with explicit INTO deputyClass.
+     * Validates the target, inserts into the source class first,
+     * then manually inserts a copy into the non-strict deputy and creates BiPointers.
+     */
+    public void executeWithDeputy(String tableName, List<String> columns, TupleList tupleList,
+                                   String deputyClassName) throws TMDBException, IOException {
+        int classId = memConnect.getClassId(tableName);
+        int deputyId = memConnect.getClassId(deputyClassName);
+
+        validateExplicitDeputy(classId, deputyId);
+
+        int attrNum = memConnect.getClassAttrnum(tableName);
+        int[] attrIdList = memConnect.getAttridList(classId, columns);
+        for (Tuple tuple : tupleList.tuplelist) {
+            if (tuple.tuple.length != columns.size()) {
+                throw new TMDBException();
+            }
+            // Insert into source class
+            int sourceTupleId = insertOne(classId, columns, tuple, attrNum, attrIdList);
+            // Insert into deputy class and create BiPointer
+            insertExplicitDeputyTuple(classId, deputyId, sourceTupleId, tuple);
+        }
+    }
+
+    /**
+     * Validates that the target is a legal non-strict SelectDeputy of the source class.
+     */
+    private void validateExplicitDeputy(int sourceClassId, int deputyClassId) throws TMDBException {
+        if (!DeputyUtils.isDeputyOf(sourceClassId, deputyClassId)) {
+            throw new TMDBException(
+                ErrorList.TYPE_IS_NOT_SUPPORTED,
+                "Class " + deputyClassId + " is not a deputy of class " + sourceClassId);
+        }
+        if (DeputyUtils.isStrictSelectDeputy(deputyClassId)) {
+            throw new TMDBException(
+                ErrorList.TYPE_IS_NOT_SUPPORTED,
+                "Cannot use INTO with a strict SelectDeputy (has WHERE clause)");
+        }
+        if (!DeputyUtils.isNonStrictSelectDeputy(deputyClassId)) {
+            throw new TMDBException(
+                ErrorList.TYPE_IS_NOT_SUPPORTED,
+                "INTO is only supported for non-strict SelectDeputy");
+        }
+    }
+
+    /**
+     * Inserts a copy of the source tuple into the non-strict deputy class
+     * and creates a BiPointer linking them.
+     */
+    private void insertExplicitDeputyTuple(int sourceClassId, int deputyClassId,
+                                            int sourceTupleId, Tuple sourceTuple)
+            throws TMDBException {
+        int deputyAttrNum = memConnect.getClassAttrnum(deputyClassId);
+        Object[] deputyValues = new Object[deputyAttrNum];
+
+        for (SwitchingTableItem sti : MemConnect.getSwitchingTableList()) {
+            if (sti.oriId == sourceClassId && sti.deputyId == deputyClassId) {
+                int oriIdx = memConnect.getAttrid(sourceClassId, sti.oriAttr);
+                if (oriIdx >= 0 && oriIdx < sourceTuple.tuple.length) {
+                    deputyValues[sti.deputyAttrId] = sourceTuple.tuple[oriIdx];
+                }
+            }
+        }
+
+        int deputyTupleId = MemConnect.getObjectTable().maxTupleId++;
+        MemConnect.getObjectTableList().add(
+            new ObjectTableItem(deputyClassId, deputyTupleId));
+
+        Tuple deputyTuple = new Tuple();
+        deputyTuple.tupleSize = deputyAttrNum;
+        deputyTuple.tupleId = deputyTupleId;
+        deputyTuple.classId = deputyClassId;
+        deputyTuple.tuple = deputyValues;
+        deputyTuple.delete = false;
+
+        memConnect.InsertTuple(deputyTuple);
+
+        MemConnect.getBiPointerTableList().add(
+            new BiPointerTableItem(sourceClassId, sourceTupleId, deputyClassId, deputyTupleId));
     }
 
     public String deputyquery(int classid,int deputyid)
@@ -243,9 +329,13 @@ public class InsertImpl implements Insert {
         // 2.1 找到源类所有的代理类
         ArrayList<Integer> DeputyIdList = memConnect.getDeputyIdList(classId);
 
-        // 2.2 将元组转换为代理类应有的形式
+        // 2.2 Propagate to deputy classes
         if (!DeputyIdList.isEmpty()) {
             for (int deputyClassId : DeputyIdList) {
+                // Non-strict SelectDeputy is not automatically propagated;
+                // tuples are added explicitly via INSERT ... INTO deputyClass
+                if (DeputyUtils.isNonStrictSelectDeputy(deputyClassId)) continue;
+
                 String stmt = getdeputyrule(deputyClassId,0);
                 Transaction transaction = Transaction.getInstance();    // 创建一个事务实例
                 SelectResult selectResult = null;

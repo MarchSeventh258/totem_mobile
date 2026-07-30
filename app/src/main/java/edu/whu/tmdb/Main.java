@@ -219,13 +219,15 @@ public class Main {
             }
         }catch (JSQLParserException e) {
             System.out.println("syntax error");
+            throw new RuntimeException(e);
         } catch (TokenMgrError e) {
             // TokenMgrError extends Error, not Exception — must be caught here,
             // otherwise lexical errors (e.g. a full-width ';') crash the app
             System.out.println("syntax error");
             throw new RuntimeException(e);
         } catch (TMDBException e) {
-            System.out.println("Cross-class query error: " + e.getMessage());
+            System.out.println(e.getMessage());
+            throw new RuntimeException(e);
         }
         return selectResult;
     }

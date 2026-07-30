@@ -58,7 +58,12 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
     public boolean createDeputyClassStreamLine(SelectResult selectResult, int deputyType, String deputyClassName, Select selectStmt) throws TMDBException, IOException {
         int deputyId = createDeputyClass(deputyClassName, selectResult, deputyType);
         createDeputyTableItem(selectResult, deputyType, deputyId, selectStmt);
-        createBiPointerTableItem(selectResult, deputyId,deputyType);
+        // Non-strict SelectDeputy classes are not pre-populated;
+        // tuples are added explicitly via INSERT ... INTO
+        boolean isNonStrictSelect = (deputyType == 0) && isNonStrictSelectDeputy(selectStmt);
+        if (!isNonStrictSelect) {
+            createBiPointerTableItem(selectResult, deputyId, deputyType);
+        }
         return true;
     }
 
@@ -121,12 +126,18 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
     
         TupleList tpl = selectResult.getTpl();
         int tupleNum = tpl.tuplenum;
-        String []deputyrule = new String[3];
+        String []deputyrule = new String[4];
         deputyrule[0] = selectStmt.toString();
         deputyrule[2] = "";
-        
+        deputyrule[3] = "";
+
         switch (deputyType) {
-            case 0:   deputyrule[1] = "selectdeputy"; break;
+            case 0:
+                deputyrule[1] = "selectdeputy";
+                if (isNonStrictSelectDeputy(selectStmt)) {
+                    deputyrule[2] = "nonstrict";
+                }
+                break;
             case 1:   deputyrule[1] = "joindeputy"; break;
             case 2:   deputyrule[1] = "uniondeputy"; break;
             case 3:   deputyrule[1] = "groupdeputy"; break;
@@ -231,10 +242,10 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
                 if (processedClassIds.contains(originId)) {
                     continue;
                 }
-                if(deputyType==1){//join代理类，将连接条件存至deputyrule
-                    ArrayList<String>joinColumnNames = selectResult.getJoinColumnNames();
+                if(deputyType==1){
+                    ArrayList<String> joinColumnNames = selectResult.getJoinColumnNames();
                     if(joinColumnNames.size()!=0){
-                        deputyrule[2] = String.join(",", joinColumnNames); 
+                        deputyrule[3] = String.join(",", joinColumnNames);
                     }
                 }
                 DeputyTableItem deputyTableItem = new DeputyTableItem(originId, deputyId, deputyRuleId);
@@ -400,6 +411,26 @@ public class CreateDeputyClassImpl implements CreateDeputyClass {
             res.add(collect.indexOf(s));
         }
         return res;
+    }
+
+    /**
+     * A SelectDeputy is non-strict when its SELECT has no WHERE clause.
+     * Non-strict deputies are populated manually via INSERT ... INTO deputyClass.
+     */
+    private boolean isNonStrictSelectDeputy(Select selectStmt) {
+        if (!(selectStmt.getSelectBody() instanceof net.sf.jsqlparser.statement.select.PlainSelect)) {
+            return false;
+        }
+        net.sf.jsqlparser.statement.select.PlainSelect ps =
+            (net.sf.jsqlparser.statement.select.PlainSelect) selectStmt.getSelectBody();
+        return ps.getWhere() == null;
+    }
+
+    /**
+     * Public static variant for use by InsertImpl when validating INTO targets.
+     */
+    public static boolean isNonStrictDeputy(int deputyClassId) {
+        return DeputyUtils.isNonStrictSelectDeputy(deputyClassId);
     }
 }
 

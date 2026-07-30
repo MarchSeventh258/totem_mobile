@@ -32,6 +32,9 @@ public class RegressionTest {
         testGroupDeputy();
         testCrossClassQuery();
         testUpdateMigration();
+        testNonStrictSelectDeputy();
+        testNonStrictErrorCases();
+        testNonStrictUpdateMigration();
 
         System.out.println("========================================");
         System.out.println("  " + passed + " passed, " + failed + " failed");
@@ -352,6 +355,61 @@ public class RegressionTest {
             "|Alice               |55                  |\n");
     }
 
+    // ==================== Non-strict SelectDeputy ====================
+
+    static void testNonStrictSelectDeputy() {
+        section("Non-strict SelectDeputy");
+        exec("DROP CLASS Emp;");
+        ddl("CREATE TABLE Emp (id INT, name STRING, dept STRING);");
+        ddl("INSERT INTO Emp VALUES (1, 'Alice', 'IT');");
+        ddl("INSERT INTO Emp VALUES (2, 'Bob', 'HR');");
+        ddl("INSERT INTO Emp VALUES (3, 'Charlie', 'IT');");
+        ddl("CREATE SELECTDEPUTY EmpHR AS SELECT id, name FROM Emp;");
+        check("select * from EmpHR;",
+            "EmpHR\n" +
+            "|id                  |name                |\n");
+        ddl("INSERT INTO Emp VALUES (4, 'Diana', 'HR') INTO EmpHR;");
+        check("select * from EmpHR;",
+            "EmpHR\n" +
+            "|id                  |name                |\n" +
+            "|4                   |Diana               |\n");
+        ddl("INSERT INTO Emp VALUES (5, 'Eve', 'IT') INTO EmpHR;");
+        check("select * from EmpHR;",
+            "EmpHR\n" +
+            "|id                  |name                |\n" +
+            "|4                   |Diana               |\n" +
+            "|5                   |Eve                 |\n");
+    }
+
+    static void testNonStrictErrorCases() {
+        section("Non-strict Error Cases");
+        ddl("DELETE FROM Student WHERE id > 0;");
+        ddl("INSERT INTO Student VALUES (1, 'Alice', 85);");
+        ddl("INSERT INTO Student VALUES (2, 'Bob', 72);");
+        ddl("CREATE SELECTDEPUTY HighScore AS SELECT id, name, score FROM Student WHERE score > 80;");
+        // INTO strict deputy should fail
+        expectFail("INSERT INTO Student VALUES (3, 'Charlie', 90) INTO HighScore;");
+        // INTO a non-deputy class should fail
+        expectFail("INSERT INTO Student VALUES (4, 'Diana', 60) INTO Course;");
+    }
+
+    static void testNonStrictUpdateMigration() {
+        section("Non-strict UPDATE/DELETE Migration");
+        // UPDATE source → propagates to non-strict deputy
+        ddl("UPDATE Emp SET name = 'Diana2' WHERE id = 4;");
+        check("select * from EmpHR;",
+            "EmpHR\n" +
+            "|id                  |name                |\n" +
+            "|4                   |Diana2              |\n" +
+            "|5                   |Eve                 |\n");
+        // DELETE source → deputy tuple also deleted
+        ddl("DELETE FROM Emp WHERE id = 5;");
+        check("select * from EmpHR;",
+            "EmpHR\n" +
+            "|id                  |name                |\n" +
+            "|4                   |Diana2              |\n");
+    }
+
     // ==================== 辅助方法 ====================
 
     static void section(String name) {
@@ -370,6 +428,17 @@ public class RegressionTest {
 
     static void exec(String sql) {
         try { Main.execute(sql); } catch (Exception e) {}
+    }
+
+    static void expectFail(String sql) {
+        try {
+            Main.execute(sql);
+            System.out.println("  [FAIL] " + sql + " (expected error, but succeeded)");
+            failed++;
+        } catch (Exception e) {
+            System.out.println("  [PASS] " + sql + " (expected error)");
+            passed++;
+        }
     }
 
     static void check(String sql, String expected) {
